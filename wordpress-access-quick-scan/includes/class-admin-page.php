@@ -109,6 +109,7 @@ class WPAQS_Admin_Page {
 
 			<?php self::render_notice(); ?>
 			<?php self::render_findings( $findings ); ?>
+			<?php self::render_timeline( WPAQS_Timeline::build( $accounts, $sessions, $passwords ) ); ?>
 			<?php self::render_code_holders( $accounts ); ?>
 			<?php self::render_accounts( $accounts, $sessions ); ?>
 			<?php self::render_passwords( $accounts, $passwords ); ?>
@@ -330,6 +331,7 @@ class WPAQS_Admin_Page {
 	 * @return void
 	 */
 	private static function render_accounts( array $accounts, array $sessions ) {
+		$mine = WPAQS_Sessions::current_verifier();
 		$sort = WPAQS_Sort::requested( 'accounts', array( 'registered', 'login' ) );
 
 		if ( ! WPAQS_Sort::is_active( 'accounts' ) ) {
@@ -433,6 +435,11 @@ class WPAQS_Admin_Page {
 												<?php if ( WPAQS_Sessions::is_scripted( $session['ua'] ) ) : ?>
 													<span class="wpaqs-chip"><?php esc_html_e( 'not a browser', 'wpaqs' ); ?></span>
 												<?php endif; ?>
+												<?php // Knowing which one is yours matters before pressing anything that
+													// ends a session, and today the only clue is recognising the address. ?>
+												<?php if ( '' !== $mine && $session['verifier'] === $mine ) : ?>
+													<span class="wpaqs-chip wpaqs-chip-you"><?php esc_html_e( 'this is you', 'wpaqs' ); ?></span>
+												<?php endif; ?>
 												<br /><span class="description">
 													<?php echo esc_html( WPAQS_App_Passwords::stamp( $session['login'] ) ); ?>
 													—
@@ -441,7 +448,7 @@ class WPAQS_Admin_Page {
 
 												<?php // One session, so an administrator can close a scripted one without
 													// signing themselves out. Its own form, a sibling of the others. ?>
-												<?php if ( WPAQS_Sessions::can_end_one() && '' !== $session['verifier'] ) : ?>
+												<?php if ( WPAQS_Sessions::can_end_one() && '' !== $session['verifier'] && count( $rows_sessions ) > 1 ) : ?>
 													<br />
 													<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
 														onsubmit="return confirm( '<?php echo esc_js( __( 'End this one session? Every other session on the account stays open, including your own if this is your account. Whoever held it has to sign in again.', 'wpaqs' ) ); ?>' );">
@@ -456,13 +463,31 @@ class WPAQS_Admin_Page {
 										<?php endforeach; ?>
 									</ul>
 
-									<?php if ( '' === $refusal ) : ?>
+									<?php
+									// The bulk control only when it does something the per-session one cannot.
+									// With a single session the two are the same press, and two buttons for one
+									// outcome is a reader wondering what the difference is.
+									$per_session = WPAQS_Sessions::can_end_one();
+									// Nothing to end is also a reason not to offer the button: with no sessions
+									// the plural would read "End all 0 sessions".
+									$show_bulk   = '' === $refusal && ! empty( $rows_sessions )
+										&& ( count( $rows_sessions ) > 1 || ! $per_session );
+									?>
+									<?php if ( $show_bulk ) : ?>
 										<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
 											onsubmit="return confirm( '<?php echo esc_js( __( 'End every session for this account? It is signed out everywhere and has to sign in again — nothing is deleted and no password changes. Application passwords keep working; revoke those separately.', 'wpaqs' ) ); ?>' );">
 											<input type="hidden" name="action" value="wpaqs_end_sessions" />
 											<input type="hidden" name="user_id" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
 											<?php wp_nonce_field( WPAQS_NONCE . '-end-sessions-' . $row['id'] ); ?>
-											<button type="submit" class="button button-small"><?php esc_html_e( 'End these sessions', 'wpaqs' ); ?></button>
+											<button type="submit" class="button button-small">
+												<?php
+												printf(
+													/* translators: %s: number of sessions. */
+													esc_html( _n( 'End this session', 'End all %s sessions', count( $rows_sessions ), 'wpaqs' ) ),
+													esc_html( number_format_i18n( count( $rows_sessions ) ) )
+												);
+												?>
+											</button>
 										</form>
 									<?php elseif ( 'self' === $refusal ) : ?>
 										<p class="description"><?php echo esc_html( WPAQS_Controller::refusal_text( $refusal ) ); ?></p>
@@ -591,6 +616,87 @@ class WPAQS_Admin_Page {
 				</form>
 			<?php endforeach; ?>
 		</p>
+		<?php
+	}
+
+	/**
+	 * What changed, newest first.
+	 *
+	 * Somebody who came here because the site is behaving oddly is asking what is different
+	 * rather than who has access, and no single line answers that. The ordering does: a session
+	 * from an unfamiliar address, an application password created twenty minutes later, and
+	 * that password used from somewhere else is an account takeover with its steps in order,
+	 * where each line alone is thin.
+	 *
+	 * @param array $timeline Result of WPAQS_Timeline::build().
+	 * @return void
+	 */
+	private static function render_timeline( array $timeline ) {
+		?>
+		<details class="wpaqs-card wpaqs-collapsible" id="wpaqs-timeline" open>
+			<summary>
+				<h2><?php esc_html_e( 'What changed', 'wpaqs' ); ?></h2>
+				<span class="description">
+					<?php
+					printf(
+						/* translators: 1: number of events, 2: number of days. */
+						esc_html( _n( '%1$s event in the last %2$s days', '%1$s events in the last %2$s days', count( $timeline['entries'] ), 'wpaqs' ) ),
+						esc_html( number_format_i18n( count( $timeline['entries'] ) ) ),
+						esc_html( number_format_i18n( WPAQS_RECENT_DAYS ) )
+					);
+					?>
+				</span>
+			</summary>
+
+			<p class="description">
+				<?php esc_html_e( 'Everything access-related that WordPress dates, in order. No single line here means much on its own — a sign-in followed by an application password being created and then used from somewhere else is the shape worth reading.', 'wpaqs' ); ?>
+			</p>
+
+			<?php if ( $timeline['capped'] ) : ?>
+				<div class="notice notice-warning inline">
+					<p>
+						<?php
+						printf(
+							/* translators: 1: entries shown, 2: entries in the window. */
+							esc_html__( 'Showing the %1$s most recent of %2$s. The rest are older, not hidden — but this list is not the whole window.', 'wpaqs' ),
+							esc_html( number_format_i18n( WPAQS_Timeline::MAX_ENTRIES ) ),
+							esc_html( number_format_i18n( $timeline['total'] ) )
+						);
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( empty( $timeline['entries'] ) ) : ?>
+				<p>
+					<?php
+					printf(
+						/* translators: %s: number of days. */
+						esc_html__( 'Nothing WordPress dates has happened in the last %s days: no account created, no session opened, no application password made or used, no password reset asked for. On a site with people working on it that is itself worth a thought.', 'wpaqs' ),
+						esc_html( number_format_i18n( WPAQS_RECENT_DAYS ) )
+					);
+					?>
+				</p>
+			<?php else : ?>
+				<ul class="wpaqs-timeline">
+					<?php foreach ( $timeline['entries'] as $entry ) : ?>
+						<li class="wpaqs-event wpaqs-event-<?php echo esc_attr( $entry['kind'] ); ?>">
+							<span class="wpaqs-event-when">
+								<?php echo esc_html( WPAQS_App_Passwords::stamp( $entry['at'] ) ); ?>
+							</span>
+							<span class="wpaqs-event-what">
+								<?php echo esc_html( $entry['label'] ); ?>
+								—
+								<strong><?php echo esc_html( $entry['login'] ); ?></strong>
+								<?php if ( '' !== $entry['detail'] ) : ?>
+									<span class="description"><?php echo esc_html( $entry['detail'] ); ?></span>
+								<?php endif; ?>
+							</span>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+			<?php endif; ?>
+		</details>
 		<?php
 	}
 

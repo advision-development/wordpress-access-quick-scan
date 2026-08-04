@@ -97,6 +97,7 @@ class Stub_User {
 	public $user_registered;
 	public $roles;
 	public $caps;
+	public $user_activation_key = '';
 
 	public function __construct( $id, $login, array $roles, array $caps, $registered ) {
 		$this->ID              = $id;
@@ -347,5 +348,57 @@ check(
 $GLOBALS['acting_caps'] = array( 'manage_options' => true );
 
 check( 'an account you cannot edit is refused', '' !== WPAQS_Accounts::remove_direct_capability( 13, 'edit_users' )['error'] );
+
+// ------------------------------------------------------- pending password reset
+
+/**
+ * The pending-reset findings for one activation key.
+ *
+ * @param string $key Value of user_activation_key.
+ * @return array
+ */
+function resets( $key ) {
+	$GLOBALS['users'][1]->user_activation_key = $key;
+
+	$found = array();
+
+	foreach ( WPAQS_Accounts::findings( WPAQS_Accounts::all() ) as $finding ) {
+		if ( 'pending_password_reset' === $finding['rule'] ) {
+			$found[] = $finding;
+		}
+	}
+
+	$GLOBALS['users'][1]->user_activation_key = '';
+
+	return $found;
+}
+
+// retrieve_password() writes the key and reset_password() clears it, so a key still sitting
+// there means somebody asked for a reset link on an administrator account and it was never
+// used. On a site behaving oddly that is either a locked-out colleague or an attempt.
+$asked = resets( ( time() - HOUR_IN_SECONDS ) . ':$P$Babcdefgh' );
+
+check( 'a pending reset on an administrator is reported', 1 === count( $asked ), (string) count( $asked ) );
+check( 'and the evidence names the account', 1 === count( $asked ) && false !== strpos( $asked[0]['evidence'], 'owner' ) );
+check( 'and when it was asked for', 1 === count( $asked ) && false !== strpos( $asked[0]['evidence'], 'UTC' ) );
+
+// The benign case, and the one that matters: almost every site has nobody mid-reset, and a
+// rule that fires on all of them is a rule nobody reads.
+check(
+	'an account with no pending reset is silent',
+	array() === resets( '' ),
+	'this is the state of every account on a site where nobody is resetting anything'
+);
+
+// Older WordPress stored the hash with no timestamp. That still says a reset is pending, so
+// reporting nothing would clear an account that is not clear.
+$undated = resets( '$P$Babcdefghijklmnop' );
+
+check( 'an undated key is still reported', 1 === count( $undated ), (string) count( $undated ) );
+check(
+	'and the evidence says the hour is unknown rather than showing 1970',
+	1 === count( $undated ) && false !== strpos( $undated[0]['evidence'], 'unknown' ),
+	'gmdate( 0 ) would read as a reset requested in 1970'
+);
 
 finish();

@@ -93,6 +93,9 @@ class WPAQS_Accounts {
 				'roles'      => array_values( (array) $user->roles ),
 				'is_admin'   => in_array( 'administrator', (array) $user->roles, true ),
 				'direct'     => self::direct_capabilities( $user, $roles ),
+				// A pending reset comes off the user row rather than a query: WP_User carries
+				// every wp_users column, and user_activation_key is one of them.
+				'reset_requested' => self::reset_requested_at( isset( $user->user_activation_key ) ? $user->user_activation_key : '' ),
 			);
 		}
 
@@ -200,6 +203,23 @@ class WPAQS_Accounts {
 				'lookalike_login',
 				'user:' . $pair['row']['id'],
 				sprintf( 'login=%1$s resembles=%2$s', $pair['row']['login'], $pair['privileged'] )
+			);
+		}
+
+		foreach ( $accounts['rows'] as $row ) {
+			if ( empty( $row['reset_requested'] ) ) {
+				continue;
+			}
+
+			$findings[] = WPAQS_Findings::make(
+				'pending_password_reset',
+				'user:' . $row['id'] . ':reset',
+				sprintf(
+					'login=%1$s roles=%2$s requested=%3$s',
+					$row['login'],
+					implode( ',', $row['roles'] ),
+					$row['reset_requested'] > 0 ? gmdate( 'Y-m-d H:i', (int) $row['reset_requested'] ) . ' UTC' : 'unknown'
+				)
 			);
 		}
 
@@ -478,6 +498,33 @@ class WPAQS_Accounts {
 		$user->remove_cap( $cap );
 
 		return array( 'error' => '' );
+	}
+
+	/**
+	 * When a pending reset was requested, from the stored key.
+	 *
+	 * `retrieve_password()` writes `time():hash` into `user_activation_key` and
+	 * `reset_password()` clears it, so a key that is still there means a reset was asked for
+	 * and never completed — with the hour attached. Older WordPress stored the hash alone, so
+	 * a key with no numeric prefix still says a reset is pending and says nothing about when.
+	 *
+	 * @param string $key Stored activation key.
+	 * @return int Timestamp, or 0 when there is no key. -1 when a reset is pending undated.
+	 */
+	public static function reset_requested_at( $key ) {
+		$key = trim( (string) $key );
+
+		if ( '' === $key ) {
+			return 0;
+		}
+
+		$parts = explode( ':', $key, 2 );
+
+		if ( 2 === count( $parts ) && ctype_digit( $parts[0] ) ) {
+			return (int) $parts[0];
+		}
+
+		return -1;
 	}
 
 	/**

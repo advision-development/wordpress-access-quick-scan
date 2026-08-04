@@ -57,6 +57,12 @@ class WPAQS_Findings {
 				'detail'         => __( 'The address that last authenticated with this password matches none of the addresses the account has an open session from. That is expected for a server-to-server integration, and it is also what a stolen credential looks like.', 'wpaqs' ),
 				'recommendation' => __( 'Decide which it is by naming the integration and the host it runs on. If you cannot, revoke the password: an integration that breaks tells you what it was, and a thief does not.', 'wpaqs' ),
 			),
+			'pending_password_reset'           => array(
+				'severity'       => 'medium',
+				'title'          => __( 'A password reset was requested and never completed', 'wpaqs' ),
+				'detail'         => __( 'WordPress stores a reset key against an account when somebody asks for a password reset, and clears it when the new password is set. This account still holds one, so a reset link was issued and nobody used it. It is one of the very few dated events WordPress records at all.', 'wpaqs' ),
+				'recommendation' => __( 'Ask the account holder whether they requested it. If they did not, somebody else typed their login or their email into the reset form — which is not access on its own, but it is somebody choosing that account. The link expires on its own, and setting a new password clears the key. If this is an administrator and nobody asked for it, treat the account as a target and check the sessions above.', 'wpaqs' ),
+			),
 			'duplicate_account_email'          => array(
 				'severity'       => 'high',
 				'title'          => __( 'Two accounts share one email address', 'wpaqs' ),

@@ -142,6 +142,32 @@ class WPAQS_Sessions {
 	}
 
 	/**
+	 * The stored key of the session this request is being made from.
+	 *
+	 * WordPress hands the browser a raw token and stores sessions keyed by its hash, so
+	 * matching them means hashing the current token the same way core does —
+	 * `WP_User_Meta_Session_Tokens::hash_token()`, which is sha256 where the hash extension is
+	 * available and md5 otherwise. It is reimplemented here rather than reached for because
+	 * that method is not public, and getting it wrong is harmless: the marker simply does not
+	 * appear.
+	 *
+	 * @return string Empty when there is no way to tell.
+	 */
+	public static function current_verifier() {
+		if ( ! function_exists( 'wp_get_session_token' ) ) {
+			return '';
+		}
+
+		$token = (string) wp_get_session_token();
+
+		if ( '' === $token ) {
+			return '';
+		}
+
+		return function_exists( 'hash' ) ? hash( 'sha256', $token ) : md5( $token );
+	}
+
+	/**
 	 * Whether one session can be ended on this site.
 	 *
 	 * `WP_Session_Tokens::destroy()` takes the raw token WordPress handed the browser, and

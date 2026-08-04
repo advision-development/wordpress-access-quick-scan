@@ -3,6 +3,43 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.5.0
+
+**A timeline.** Somebody who opens this screen because their site is behaving oddly is not
+asking who has access — they are asking what is different. The tables answer the first
+question; the timeline answers the second, out of the same data, newest first: accounts
+created, sign-ins, application passwords created and used, resets requested. No new queries —
+every timestamp in it was already read to build the tables.
+
+The value is the ordering rather than any single line. "Session from an address nobody
+recognises" is thin alone; the same line followed twenty minutes later by "application
+password created" and then "that password used from somewhere else" is a takeover with its
+steps in order. It is capped at 100 entries and **says so when it is** — a truncated list that
+looks complete tells the reader the oldest entry is the oldest event.
+
+The window excludes two things the account row cannot: a session still open but opened before
+it, since WordPress keeps a session until it expires rather than for thirty days, and an
+account registered outside it. Both are mutation-tested.
+
+**Pending password resets, at medium.** `retrieve_password()` writes `time():hash` into
+`user_activation_key` and `reset_password()` clears it, so a key still sitting there means a
+reset link was issued and never used — with the hour attached. On an administrator that is
+either a locked-out colleague or an attempt, and it is one of the very few dated events core
+keeps. Older WordPress stored the hash with no timestamp: that still reports as pending, with
+the hour shown as unknown rather than as 1970. The benign case — an account with no key, which
+is nearly every account — stays silent.
+
+**Your own session is marked.** The sessions column now says *this is you* beside the row you
+are reading the screen from, matched on the SHA-256 of the current token, which is what the
+`session_tokens` meta is keyed by. Without it the first thing anybody does with a list of live
+sessions is wonder which one they would be ending.
+
+**One button where there was one press.** With a single session, "End this session" and "End
+these sessions" did the same thing side by side. Now exactly one appears: the per-session
+button when there are several, the bulk one when the site replaces the session manager and
+per-session ending is unavailable, and neither when there are no sessions — where the plural
+would have read "End all 0 sessions". The bulk label names the count.
+
 ## 0.4.0
 
 **The tables sort, on the server.** Application passwords by name, account, created or last

@@ -378,6 +378,44 @@ check(
 	'the constant is the fix, so name it'
 );
 
+// Somebody whose site is behaving oddly is asking what changed, not who has access. The
+// tables answer the second question; only the ordering answers the first.
+check(
+	'the screen has a timeline',
+	false !== strpos( $source, "esc_html_e( 'What changed'" )
+);
+
+check(
+	'and it says no single line means much alone',
+	false !== strpos( $source, 'No single line here means much on its own' ),
+	'the value is in the sequence, and a reader has to be told that'
+);
+
+check(
+	'the timeline renders before the tables',
+	strpos( $source, 'self::render_timeline(' ) < strpos( $source, 'self::render_code_holders(' )
+);
+
+// A truncated list that looks complete is worse than a short one.
+check(
+	'the timeline discloses its cap',
+	false !== strpos( $source, 'not the whole window' )
+);
+
+// An empty timeline on a site with people working on it is itself information.
+check(
+	'and says something useful when it is empty',
+	false !== strpos( $source, 'is itself worth a thought' )
+);
+
+// Knowing which session is yours matters before pressing anything that ends one.
+check(
+	'your own session is marked',
+	false !== strpos( $source, "esc_html_e( 'this is you'" )
+		&& false !== strpos( $source, 'WPAQS_Sessions::current_verifier()' ),
+	'the only other clue is recognising your own address'
+);
+
 // Sorting is server-side: links in the headers, a usort in PHP. The sibling sorts in
 // JavaScript and paid for it twice — column indices shifted by one because the script read
 // `thead th` while the body row starts with a `td`, and sorting installed behind an early
@@ -487,6 +525,39 @@ check(
 check(
 	'and it flags a key that was never used',
 	false !== strpos( $source, "esc_html_e( 'never used'" )
+);
+
+// Two buttons for one outcome is a reader wondering what the difference is: with a single
+// session "End this session" and the bulk control are the same press.
+check(
+	'the bulk control is withheld when there is one session',
+	false !== strpos( $page_code, "count( \$rows_sessions ) > 1 || ! \$per_session" ),
+	'with one session it does exactly what the per-session button does'
+);
+
+check(
+	'and the per-session button is withheld too',
+	false !== strpos( $page_code, "'' !== \$session['verifier'] && count( \$rows_sessions ) > 1" ),
+	'whichever one is shown, exactly one is'
+);
+
+// The bulk button is still the only route when the site replaces the session manager, since
+// ending one session needs the default one.
+check(
+	'a single session still gets a button when per-session ending is unavailable',
+	false !== strpos( $page_code, '! $per_session' ),
+	'a custom session manager leaves the bulk control as the only route'
+);
+
+check(
+	'and no button at all when there are no sessions',
+	false !== strpos( $page_code, '! empty( $rows_sessions )' ),
+	'the plural would otherwise read "End all 0 sessions"'
+);
+
+check(
+	'the count is in the label rather than the reader counting rows',
+	false !== strpos( $source, "_n( 'End this session', 'End all %s sessions'" )
 );
 
 printf( "\n%d failure(s)\n", $GLOBALS['wpaqs_failures'] );

@@ -38,9 +38,18 @@ of every session that is still open. It is the only access history core keeps.
 application password authenticates the REST API as its owner and bypasses the login form, so
 an unaccounted one on an administrator is a way in that no password change closes.
 
+**What changed, in order** — one list, newest first, assembled from the timestamps the
+tables already carry: accounts created, sign-ins, application passwords created and used,
+resets requested. Capped at 100 entries, and it says so when it is. The ordering is the
+point: a sign-in from an unfamiliar address, then a password created, then that password
+used somewhere else, is a takeover with its steps in order.
+
+Your own session is marked *this is you*, so a list of live sessions does not leave you
+guessing which one you would be ending.
+
 ## What stands out
 
-Five findings, at `critical`, `high`, `medium` and `info`:
+Six findings, at `critical`, `high`, `medium` and `info`:
 
 | Finding | Why |
 |---|---|
@@ -48,6 +57,7 @@ Five findings, at `critical`, `high`, `medium` and `info`:
 | Registration open **and** new accounts privileged | Either alone is ordinary. Together, a stranger holds that role by filling in a form |
 | A live session opened by something that is not a browser | `curl`, a scripting library, or no user agent at all. A person signing in does not produce this |
 | An application password never used, or last used from an address the account has no session from | The first is a key nobody watches; the second is what both a server integration and a stolen credential look like |
+| A password reset requested and never completed | `user_activation_key` still holds `time():hash`, so a link was issued and not used. On an administrator, either a locked-out colleague or an attempt — and one of the few dated events core keeps |
 | An administrator registered in the last 30 days | Context for reading the list, not an accusation |
 
 ## What it cannot check

@@ -125,8 +125,14 @@ Four readers, each answering one question and testable on its own:
 | `WPAQS_App_Passwords` | `created`, `last_used`, `last_ip` per password |
 | `WPAQS_Registration` | `users_can_register` and `default_role`, together |
 
-The screen renders four sections: the findings, the account inventory, the application
-passwords, and what it cannot check. The last three fold.
+`WPAQS_Timeline` reads nothing. It is handed what the readers already returned and orders it,
+which is why `test-timeline.php` asserts the file contains no `get_users`, `get_user_meta`,
+`$wpdb`, `get_posts` or `WP_Query`: a query in there would make opening the screen cost more
+the longer the site has been running.
+
+The screen renders five sections: the findings, the timeline, the account inventory, the
+application passwords, and what it cannot check. All but the findings and the timeline fold
+shut by default.
 
 `WPAQS_Findings::catalog()` declares every rule's severity and wording once, so a severity
 cannot drift from the sentence explaining it. Readers supply a target and an evidence
@@ -282,6 +288,7 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-actions.php` | The self refusal, the multisite capability, nonce scoping, live existence, and that nothing calls a user delete |
 | `test-sort.php` | The allowlist, per-table isolation, numbers not sorting like text, never-used first, stable ties, and the link reversing the active column |
 | `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |
+| `test-timeline.php` | Ordering, both window exclusions, the disclosed cap keeping the newest end, the activation-key parser, and that the class runs no query |
 | `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap, grouped rendering, and that no evidence is echoed raw |
 
 When adding a rule, add both a positive case and the benign case that must **not** match. A
