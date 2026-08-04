@@ -312,6 +312,27 @@ check(
 	'the moment sharing works, a gated remainder disappears'
 );
 
+// Who can run code is its own section: the Users screen shows roles, and a role is neither
+// the whole story nor obviously mapped to "can put code on this site".
+check(
+	'the code-capability section exists',
+	false !== strpos( $source, "esc_html_e( 'Who can run code'" ),
+	'the blast radius deserves one view'
+);
+
+check(
+	'and it says what the list means',
+	false !== strpos( $source, 'blast radius' )
+);
+
+// If the editors are reachable, every account on that list can run code without uploading
+// anything — which changes what the list means, so the screen says so where the list is.
+check(
+	'the file-editor posture is stated beside the list',
+	false !== strpos( $source, 'DISALLOW_FILE_EDIT' ),
+	'the constant is the fix, so name it'
+);
+
 // Collapsible sections. Each one is a details, each summary holds its h2 so the heading
 // stays the click target, and every details closes.
 check(

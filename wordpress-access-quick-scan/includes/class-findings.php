@@ -57,6 +57,36 @@ class WPAQS_Findings {
 				'detail'         => __( 'The address that last authenticated with this password matches none of the addresses the account has an open session from. That is expected for a server-to-server integration, and it is also what a stolen credential looks like.', 'wpaqs' ),
 				'recommendation' => __( 'Decide which it is by naming the integration and the host it runs on. If you cannot, revoke the password: an integration that breaks tells you what it was, and a thief does not.', 'wpaqs' ),
 			),
+			'registered_after_first_post'       => array(
+				'severity'       => 'critical',
+				'title'          => __( 'Account is younger than its own oldest post', 'wpaqs' ),
+				'detail'         => __( 'WordPress will not let a post be saved against an author that does not exist yet, so a post cannot predate the account that wrote it. This one does. The account row, the post row, or both were written straight into the database rather than through WordPress.', 'wpaqs' ),
+				'recommendation' => __( 'This is not a heuristic — it is arithmetic, and there is no ordinary way to produce it. Something has write access to this database that is not going through WordPress, which is why changing passwords and revoking keys will not close it. Read the posts this account owns, then look for code with database access, starting with a db.php drop-in. WordPress Malware Quick Scan reads the filesystem for exactly that.', 'wpaqs' ),
+			),
+			'duplicate_account_email'          => array(
+				'severity'       => 'high',
+				'title'          => __( 'Two accounts share one email address', 'wpaqs' ),
+				'detail'         => __( 'WordPress refuses to create a second account on an address already in use, so two accounts holding one address did not both arrive through WordPress. One of them was written directly into the database.', 'wpaqs' ),
+				'recommendation' => __( 'Work out which account is the newer one and what it can do. An address that already receives password resets for a legitimate account is also the address that receives them for this one.', 'wpaqs' ),
+			),
+			'lookalike_login'                  => array(
+				'severity'       => 'medium',
+				'title'          => __( 'Account login imitates a privileged one', 'wpaqs' ),
+				'detail'         => __( 'Two logins on this site are the same word once digits standing in for letters are read as those letters — admin and adm1n, for instance — and one of the two can change the site. A name chosen to be misread is a name chosen to survive somebody glancing at the user list.', 'wpaqs' ),
+				'recommendation' => __( 'Compare the two accounts: registration dates, roles, and what each has written. A brand or a staging account can produce a near-collision honestly, so confirm rather than assume.', 'wpaqs' ),
+			),
+			'file_editing_enabled'             => array(
+				'severity'       => 'medium',
+				'title'          => __( 'Code can be edited from inside the admin', 'wpaqs' ),
+				'detail'         => __( 'Neither DISALLOW_FILE_EDIT nor DISALLOW_FILE_MODS is set, so the theme and plugin file editors are available. Every account that can reach them can run code on this site without uploading anything, which makes each one a way in rather than just an account.', 'wpaqs' ),
+				'recommendation' => __( 'Add define( \'DISALLOW_FILE_EDIT\', true ); to wp-config.php. Nothing legitimate needs the built-in editors — deployments and updates do not use them — and it removes the shortest path from a stolen administrator password to code running on the site.', 'wpaqs' ),
+			),
+			'sessions_many_networks'           => array(
+				'severity'       => 'high',
+				'title'          => __( 'One account is signed in from several networks at once', 'wpaqs' ),
+				'detail'         => __( 'This account holds live sessions from addresses on three or more separate networks. A laptop and a phone are normally two, and a person travelling is two over time rather than three at once.', 'wpaqs' ),
+				'recommendation' => __( 'Ask the account holder how many devices they are signed in on. If the number does not match, end the sessions from this screen and change the password: the sessions are the evidence, so read the addresses before ending them.', 'wpaqs' ),
+			),
 			'recent_administrator'              => array(
 				'severity'       => 'info',
 				'title'          => __( 'Administrator account registered recently', 'wpaqs' ),

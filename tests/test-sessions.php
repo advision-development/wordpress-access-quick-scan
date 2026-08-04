@@ -114,4 +114,66 @@ $clean = WPAQS_Sessions::findings( $account, array( $one[0] ) );
 
 check( 'a browser-only account is silent', array() === $clean );
 
+// ------------------------------------------------------------------- networks
+
+check( 'an IPv4 network is the first two octets', '203.0' === WPAQS_Sessions::network_of( '203.0.113.9' ) );
+check( 'an IPv6 network is the first three groups', '2001:db8:1' === WPAQS_Sessions::network_of( '2001:db8:1:2::5' ), WPAQS_Sessions::network_of( '2001:db8:1:2::5' ) );
+check( 'a malformed address has no network', '' === WPAQS_Sessions::network_of( 'nonsense' ) );
+check( 'and neither does an empty one', '' === WPAQS_Sessions::network_of( '' ) );
+
+/**
+ * Sessions from a list of addresses, all with an ordinary browser agent.
+ *
+ * @param array $addresses Addresses.
+ * @return array
+ */
+function sessions_from( array $addresses ) {
+	$sessions = array();
+
+	foreach ( $addresses as $address ) {
+		$sessions[] = array(
+			'ip'         => $address,
+			'ua'         => 'Mozilla/5.0 (Macintosh) Chrome/126.0',
+			'login'      => 1750000000,
+			'expiration' => 1760000000,
+			'readable'   => true,
+		);
+	}
+
+	return $sessions;
+}
+
+$account = array( 'id' => 5, 'login' => 'shared' );
+
+// The benign case, and the reason the threshold is three rather than two: a laptop on an
+// office connection and a phone on mobile data are two networks and entirely ordinary.
+$two = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '198.51.100.4' ) ) );
+
+check(
+	'two networks is silent',
+	array() === $two,
+	'a laptop and a phone are two networks on a healthy site'
+);
+
+$three = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '198.51.100.4', '192.0.2.7' ) ) );
+
+check( 'three networks is reported', 1 === count( $three ), (string) count( $three ) );
+check( 'at high', 1 === count( $three ) && 'high' === $three[0]['severity'] );
+check( 'and the evidence names them', 1 === count( $three ) && false !== strpos( $three[0]['evidence'], '192.0' ) );
+
+// Several addresses on one network are one network: an office with a changing address must
+// not read as somebody signed in from everywhere.
+$same = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '203.0.113.40', '203.0.99.1', '203.0.5.5' ) ) );
+
+check(
+	'many addresses on one network stay one network',
+	array() === $same,
+	'a changing office address is not three places at once'
+);
+
+// A session with no address recorded cannot place anybody anywhere.
+$blank = WPAQS_Sessions::findings( $account, sessions_from( array( '', '', '' ) ) );
+
+check( 'sessions with no addresses report no networks', array() === $blank );
+
 finish();

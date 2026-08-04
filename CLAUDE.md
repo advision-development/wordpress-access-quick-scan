@@ -137,6 +137,20 @@ only capabilities that change the site are reported, because a direct grant of `
 noise. The sibling shipped a heuristic that matched a football site's own editorial content
 and had to narrow it; the lesson is to say what a rule cannot know.
 
+**`registered_after_first_post` is the only rule here that is not a heuristic.** A post
+cannot predate its author, because `wp_insert_post()` requires one that exists. It reads
+**both** date columns: a row written straight into the database often carries a local
+`post_date` and a zero `post_date_gmt`, so reading only the GMT column would hide precisely
+the rows the rule is for. The sibling learned that exact lesson as `post_without_gmt_date`.
+`WPAQS_Authorship::TOLERANCE` exists because an import can land registration and first post
+in the same moment.
+
+**A confusable-character fold has to be symmetric.** Mapping digits onto letters is not
+enough: `1` imitates both `i` and `l`, so mapping it to either leaves `adm1n` and `admin`
+apart. Every member of a set folds to one representative, letters included. That
+over-collapses, which is why `lookalike_login` fires only when one side of the pair can
+change the site — a site with several brands has honest near-collisions.
+
 **A rule needs a combination, never a single fact.** `users_can_register` alone is how
 membership sites work. A custom `default_role` alone is a normal choice. The pair is the
 finding, and `test-registration.php` asserts each half alone stays silent.
@@ -221,6 +235,7 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-sessions.php` | Scripted-versus-browser classification both ways, malformed session meta reported rather than skipped |
 | `test-app-passwords.php` | Unused, foreign address, no recorded address, and a password used from a live session's own IP |
 | `test-registration.php` | The combination fires; each half alone does not; `'0'` is not truthy |
+| `test-authorship.php` | An account younger than its own content, the zero-GMT fallback, the tolerance, and the benign cases: wrote after registering, started the same day, no posts |
 | `test-actions.php` | The self refusal, the multisite capability, nonce scoping, live existence, and that nothing calls a user delete |
 | `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |
 | `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap, grouped rendering, and that no evidence is echoed raw |

@@ -73,6 +73,7 @@ class WPAQS_Admin_Page {
 		$accounts = WPAQS_Accounts::all();
 		$findings = WPAQS_Accounts::findings( $accounts );
 		$findings = array_merge( $findings, WPAQS_Registration::findings() );
+		$findings = array_merge( $findings, WPAQS_Authorship::findings( $accounts, WPAQS_Authorship::earliest_posts() ) );
 
 		$sessions  = array();
 		$passwords = array();
@@ -109,6 +110,7 @@ class WPAQS_Admin_Page {
 
 			<?php self::render_notice(); ?>
 			<?php self::render_findings( $findings ); ?>
+			<?php self::render_code_holders( $accounts ); ?>
 			<?php self::render_accounts( $accounts, $sessions ); ?>
 			<?php self::render_passwords( $accounts, $passwords ); ?>
 			<?php self::render_coverage(); ?>
@@ -415,6 +417,95 @@ class WPAQS_Admin_Page {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
+		</details>
+		<?php
+	}
+
+	/**
+	 * Who can put code on this site.
+	 *
+	 * The first question during an incident, and the one no wp-admin screen answers: the
+	 * Users list shows roles, and a role is neither the whole story nor obviously mapped to
+	 * "can run code". Effective capabilities, so a grant made straight against an account
+	 * counts the same as one that arrived with Administrator.
+	 *
+	 * @param array $accounts Result of WPAQS_Accounts::all().
+	 * @return void
+	 */
+	private static function render_code_holders( array $accounts ) {
+		$holders = WPAQS_Accounts::code_holders( $accounts );
+		$editing = WPAQS_Accounts::file_editing_allowed();
+		?>
+		<details class="wpaqs-card wpaqs-collapsible" open>
+			<summary>
+				<h2><?php esc_html_e( 'Who can run code', 'wpaqs' ); ?></h2>
+				<span class="description">
+					<?php
+					printf(
+						/* translators: %s: number of accounts. */
+						esc_html( _n( '%s account', '%s accounts', count( $holders ), 'wpaqs' ) ),
+						esc_html( number_format_i18n( count( $holders ) ) )
+					);
+					?>
+				</span>
+			</summary>
+
+			<p class="description">
+				<?php esc_html_e( 'Installing or editing a plugin or theme means running code on this site, so this list is the blast radius if any one of these accounts is taken. Capabilities are the effective ones: a grant made straight against an account counts the same as one that came with its role, and the Users screen shows neither.', 'wpaqs' ); ?>
+			</p>
+
+			<?php if ( $editing ) : ?>
+				<div class="notice notice-warning inline">
+					<p>
+						<?php esc_html_e( 'The built-in theme and plugin editors are available on this site, so every account above can run code without uploading anything. Add define( \'DISALLOW_FILE_EDIT\', true ); to wp-config.php to close the shortest path from a stolen password to code running here — nothing legitimate uses those editors.', 'wpaqs' ); ?>
+					</p>
+				</div>
+			<?php else : ?>
+				<p class="description">
+					<?php esc_html_e( 'The built-in file editors are switched off by a constant in wp-config.php, so these accounts cannot edit code from inside the admin.', 'wpaqs' ); ?>
+				</p>
+			<?php endif; ?>
+
+			<?php if ( empty( $holders ) ) : ?>
+				<p><?php esc_html_e( 'No account on this site holds a capability that installs or edits code. That is unusual, and worth confirming rather than celebrating: a site nobody can update is a site that does not get patched.', 'wpaqs' ); ?></p>
+			<?php else : ?>
+				<table class="widefat striped wpaqs-table">
+					<thead>
+						<tr>
+							<th scope="col"><?php esc_html_e( 'Account', 'wpaqs' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Role', 'wpaqs' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'What it can do', 'wpaqs' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $holders as $holder ) : ?>
+							<tr>
+								<td>
+									<strong><?php echo esc_html( $holder['account']['login'] ); ?></strong>
+									<br /><span class="description"><?php echo esc_html( $holder['account']['email'] ); ?></span>
+								</td>
+								<td>
+									<code><?php echo esc_html( empty( $holder['account']['roles'] ) ? __( 'no role', 'wpaqs' ) : implode( ', ', $holder['account']['roles'] ) ); ?></code>
+								</td>
+								<td>
+									<code><?php echo esc_html( implode( ', ', $holder['caps'] ) ); ?></code>
+									<?php if ( ! empty( $holder['direct'] ) ) : ?>
+										<br /><span class="wpaqs-direct">
+											<?php
+											printf(
+												/* translators: %s: comma separated capability names. */
+												esc_html__( 'granted directly, not by a role: %s', 'wpaqs' ),
+												esc_html( implode( ', ', $holder['direct'] ) )
+											);
+											?>
+										</span>
+									<?php endif; ?>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
 		</details>
 		<?php
 	}

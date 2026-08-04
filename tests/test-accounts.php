@@ -27,6 +27,23 @@ function wp_roles() {
 	);
 }
 
+/**
+ * Role capabilities, so the code-capability reader has something to read.
+ *
+ * @param string $name Role name.
+ * @return object|null
+ */
+function get_role( $name ) {
+	$roles = array(
+		'administrator' => array( 'install_plugins' => true, 'edit_plugins' => true, 'update_core' => true, 'edit_users' => true ),
+		'editor'        => array( 'edit_others_posts' => true, 'publish_posts' => true ),
+		'subscriber'    => array( 'read' => true ),
+		'shop_manager'  => array( 'edit_others_posts' => true ),
+	);
+
+	return isset( $roles[ $name ] ) ? (object) array( 'capabilities' => $roles[ $name ] ) : null;
+}
+
 function count_users() {
 	return array( 'total_users' => count( $GLOBALS['users'] ) );
 }
@@ -142,5 +159,95 @@ check( 'the long-standing administrator is not', ! isset( $byrule['recent_admini
 
 // A recent *subscriber* is not an administrator finding.
 check( 'a recent non-administrator is not reported as one', ! isset( $byrule['recent_administrator|user:7'] ) );
+
+// ------------------------------------------------- who can run code
+
+// Effective capabilities: a grant made straight against the account counts the same as one
+// that arrived with a role, and the Users screen shows neither.
+$holders = array();
+
+foreach ( WPAQS_Accounts::code_holders( $accounts ) as $holder ) {
+	$holders[ $holder['account']['login'] ] = $holder;
+}
+
+check( 'an administrator can run code', isset( $holders['owner'] ), implode( ',', array_keys( $holders ) ) );
+
+check(
+	'and a subscriber cannot, whatever else was granted to it',
+	! isset( $holders['quiet'] ),
+	'edit_users is not a code capability'
+);
+
+check( 'a reader with a harmless direct grant cannot', ! isset( $holders['reader'] ) );
+
+// A direct grant of a code capability puts a subscriber on this list, which is the whole
+// point of reading capabilities rather than roles.
+$GLOBALS['users'][21] = user( 21, 'sneaky', array( 'subscriber' ), array( 'subscriber' => true, 'install_plugins' => true ), $old );
+
+$with_direct = array();
+
+foreach ( WPAQS_Accounts::code_holders( WPAQS_Accounts::all() ) as $holder ) {
+	$with_direct[ $holder['account']['login'] ] = $holder;
+}
+
+check( 'a direct code grant puts a subscriber on the list', isset( $with_direct['sneaky'] ) );
+check( 'and it is marked as granted directly', isset( $with_direct['sneaky'] ) && array( 'install_plugins' ) === $with_direct['sneaky']['direct'] );
+check( 'while a role holder is not', isset( $with_direct['owner'] ) && array() === $with_direct['owner']['direct'] );
+
+unset( $GLOBALS['users'][21] );
+
+// ------------------------------------------------- file editing posture
+
+check( 'file editing reads as allowed when no constant says otherwise', WPAQS_Accounts::file_editing_allowed() );
+
+// ------------------------------------------------- duplicate emails
+
+// WordPress refuses a second account on an address already in use, so a duplicate did not
+// arrive through WordPress.
+$GLOBALS['users'][31] = user( 31, 'twin-a', array( 'subscriber' ), array( 'subscriber' => true ), $old );
+$GLOBALS['users'][33] = user( 33, 'twin-b', array( 'subscriber' ), array( 'subscriber' => true ), $old );
+$GLOBALS['users'][33]->user_email = 'twin-a@example.test';
+
+$dupes = WPAQS_Accounts::duplicate_emails( WPAQS_Accounts::all() );
+
+check( 'two accounts on one address are reported', isset( $dupes['twin-a@example.test'] ) );
+check( 'and both logins are named', isset( $dupes['twin-a@example.test'] ) && 2 === count( $dupes['twin-a@example.test'] ) );
+
+unset( $GLOBALS['users'][31], $GLOBALS['users'][33] );
+
+check( 'distinct addresses are silent', array() === WPAQS_Accounts::duplicate_emails( WPAQS_Accounts::all() ) );
+
+// ------------------------------------------------- lookalike logins
+
+// A digit imitates more than one letter, so both the digit and every letter it imitates
+// fold to one representative. Mapping only digits left adm1n and admin apart.
+check( 'adm1n and admin fold together', WPAQS_Accounts::fold_login( 'adm1n' ) === WPAQS_Accounts::fold_login( 'admin' ), WPAQS_Accounts::fold_login( 'adm1n' ) . ' vs ' . WPAQS_Accounts::fold_login( 'admin' ) );
+check( 'and so do admln and admin', WPAQS_Accounts::fold_login( 'admln' ) === WPAQS_Accounts::fold_login( 'admin' ) );
+check( 'r00t folds onto root', WPAQS_Accounts::fold_login( 'r00t' ) === WPAQS_Accounts::fold_login( 'root' ) );
+check( 'ke5ha folds onto kesha', WPAQS_Accounts::fold_login( 'ke5ha' ) === WPAQS_Accounts::fold_login( 'kesha' ) );
+check( 'two unrelated logins do not fold together', WPAQS_Accounts::fold_login( 'editor' ) !== WPAQS_Accounts::fold_login( 'author' ) );
+
+$GLOBALS['users'][41] = user( 41, 'owner', array( 'administrator' ), array( 'administrator' => true ), $old );
+$GLOBALS['users'][43] = user( 43, '0wner', array( 'subscriber' ), array( 'subscriber' => true ), $old );
+
+$pairs = WPAQS_Accounts::lookalike_logins( WPAQS_Accounts::all() );
+
+check( 'a login imitating an administrator is reported', 1 === count( $pairs ), (string) count( $pairs ) );
+check( 'and it is the imitator that is named, not the administrator', 1 === count( $pairs ) && '0wner' === $pairs[0]['row']['login'] );
+check( 'and it says which account it resembles', 1 === count( $pairs ) && 'owner' === $pairs[0]['privileged'] );
+
+unset( $GLOBALS['users'][43] );
+
+// The benign case that keeps this quiet: two similar logins where neither is privileged.
+$GLOBALS['users'][45] = user( 45, 'brand1', array( 'subscriber' ), array( 'subscriber' => true ), $old );
+$GLOBALS['users'][47] = user( 47, 'brandl', array( 'subscriber' ), array( 'subscriber' => true ), $old );
+
+check(
+	'two similar unprivileged logins are silent',
+	array() === WPAQS_Accounts::lookalike_logins( WPAQS_Accounts::all() ),
+	'a site with several brands has near-collisions for honest reasons'
+);
+
+unset( $GLOBALS['users'][45], $GLOBALS['users'][47], $GLOBALS['users'][41] );
 
 finish();

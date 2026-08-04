@@ -3,6 +3,43 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.2.0
+
+**An account cannot be younger than its own oldest post.** `wp_insert_post()` requires an
+author that already exists, so this is arithmetic rather than a heuristic — and it is the one
+rule here that is. When it fires, the account row or the post row was written straight into
+the database, which is the vector that makes rotating a password useless and is the confirmed
+vector behind the sibling plugin's two incidents. Reported at critical, with the gap named.
+
+Both date columns are read. WordPress fills `post_date_gmt`, but a row inserted directly
+often carries a local `post_date` and leaves the GMT column at zero — reading only the GMT
+column would have made exactly the rows this exists to catch invisible. A minute of tolerance
+absorbs an import that lands both rows in the same moment.
+
+**Who can run code is its own section.** Installing or editing a plugin or theme means
+running code, so that list is the blast radius if any one of those accounts is taken — and no
+wp-admin screen answers it, because the Users list shows roles and a role is neither the whole
+story nor obviously mapped to code execution. Effective capabilities: a grant made straight
+against an account counts the same as one that arrived with Administrator.
+
+Beside the list, whether the built-in editors are reachable. With neither
+`DISALLOW_FILE_EDIT` nor `DISALLOW_FILE_MODS` set, every account on it can run code without
+uploading anything, which changes what the list means.
+
+**Two accounts sharing one email address.** WordPress refuses to create the second one, so a
+duplicate did not arrive through WordPress either.
+
+**A login that imitates a privileged one.** `adm1n` beside `admin`. Folding digits to letters
+was not enough — a digit imitates more than one letter, and mapping `1` to `l` left `adm1n`
+and `admin` apart — so every character in a confusable set folds to one representative,
+letters included. Over-collapsing is the accepted cost, which is why the rule only fires when
+one side of the pair can change the site: near-collisions between ordinary logins are normal
+on a site with several brands, and stay silent.
+
+**One account signed in from three or more networks at once.** Two is a laptop and a phone;
+several addresses on one network are still one network, so an office with a changing address
+does not read as somebody signed in from everywhere.
+
 ## 0.1.3
 
 **The screen states its own version.** A report that the sections do not fold and a report

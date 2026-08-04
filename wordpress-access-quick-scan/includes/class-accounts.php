@@ -49,6 +49,24 @@ class WPAQS_Accounts {
 	);
 
 	/**
+	 * Capabilities that let an account put code on the site.
+	 *
+	 * Kept apart from NOTABLE_CAPS because the question is different. Notable is "worth
+	 * mentioning"; this is "can run code", which is the blast radius on a compromised site
+	 * and the list an operator wants first.
+	 */
+	const CODE_CAPS = array(
+		'install_plugins',
+		'install_themes',
+		'edit_plugins',
+		'edit_themes',
+		'edit_files',
+		'update_plugins',
+		'update_themes',
+		'update_core',
+	);
+
+	/**
 	 * Every account, capped.
 	 *
 	 * @return array array( rows, total, capped )
@@ -169,7 +187,244 @@ class WPAQS_Accounts {
 			}
 		}
 
+		foreach ( self::duplicate_emails( $accounts ) as $email => $logins ) {
+			$findings[] = WPAQS_Findings::make(
+				'duplicate_account_email',
+				'email:' . $email,
+				sprintf( 'email=%1$s logins=%2$s', $email, implode( ',', $logins ) )
+			);
+		}
+
+		foreach ( self::lookalike_logins( $accounts ) as $pair ) {
+			$findings[] = WPAQS_Findings::make(
+				'lookalike_login',
+				'user:' . $pair['row']['id'],
+				sprintf( 'login=%1$s resembles=%2$s', $pair['row']['login'], $pair['privileged'] )
+			);
+		}
+
+		if ( self::file_editing_allowed() ) {
+			$holders = self::code_holders( $accounts );
+
+			$findings[] = WPAQS_Findings::make(
+				'file_editing_enabled',
+				'option:file_edit',
+				sprintf(
+					/* translators: %d: how many accounts can reach the editors. */
+					'accounts_that_can_run_code=%d',
+					count( $holders )
+				)
+			);
+		}
+
 		return $findings;
+	}
+
+	/**
+	 * Accounts that can put code on this site, and how.
+	 *
+	 * Effective capabilities, not roles: a capability granted straight to the account counts
+	 * exactly as much as one that came with Administrator, and the Users screen shows
+	 * neither.
+	 *
+	 * @param array $accounts Result of all().
+	 * @return array Rows of array( account, caps, via_role ).
+	 */
+	public static function code_holders( array $accounts ) {
+		$holders = array();
+
+		foreach ( $accounts['rows'] as $row ) {
+			$from_roles = array();
+
+			foreach ( $row['roles'] as $role ) {
+				$from_roles = array_merge( $from_roles, self::role_code_caps( $role ) );
+			}
+
+			$direct = array_values( array_intersect( $row['direct'], self::CODE_CAPS ) );
+			$all    = array_values( array_unique( array_merge( $from_roles, $direct ) ) );
+
+			if ( empty( $all ) ) {
+				continue;
+			}
+
+			sort( $all );
+
+			$holders[] = array(
+				'account'  => $row,
+				'caps'     => $all,
+				'direct'   => $direct,
+				'via_role' => ! empty( $from_roles ),
+			);
+		}
+
+		return $holders;
+	}
+
+	/**
+	 * Which code capabilities a role carries.
+	 *
+	 * @param string $role Role name.
+	 * @return array
+	 */
+	private static function role_code_caps( $role ) {
+		if ( ! function_exists( 'get_role' ) ) {
+			return array();
+		}
+
+		$object = get_role( (string) $role );
+
+		if ( ! $object || ! isset( $object->capabilities ) ) {
+			return array();
+		}
+
+		$held = array();
+
+		foreach ( self::CODE_CAPS as $cap ) {
+			if ( ! empty( $object->capabilities[ $cap ] ) ) {
+				$held[] = $cap;
+			}
+		}
+
+		return $held;
+	}
+
+	/**
+	 * Whether the built-in file editors are reachable.
+	 *
+	 * @return bool
+	 */
+	public static function file_editing_allowed() {
+		if ( defined( 'DISALLOW_FILE_MODS' ) && DISALLOW_FILE_MODS ) {
+			return false;
+		}
+
+		if ( defined( 'DISALLOW_FILE_EDIT' ) && DISALLOW_FILE_EDIT ) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Accounts sharing one email address.
+	 *
+	 * WordPress refuses to create a second account on an address already in use, so a
+	 * duplicate did not arrive through WordPress. Deterministic, like the authorship check.
+	 *
+	 * @param array $accounts Result of all().
+	 * @return array Email => list of logins, only where there is more than one.
+	 */
+	public static function duplicate_emails( array $accounts ) {
+		$seen = array();
+
+		foreach ( $accounts['rows'] as $row ) {
+			$email = strtolower( trim( $row['email'] ) );
+
+			if ( '' === $email ) {
+				continue;
+			}
+
+			$seen[ $email ][] = $row['login'];
+		}
+
+		$duplicates = array();
+
+		foreach ( $seen as $email => $logins ) {
+			if ( count( $logins ) > 1 ) {
+				$duplicates[ $email ] = $logins;
+			}
+		}
+
+		return $duplicates;
+	}
+
+	/**
+	 * A login reduced to one representative per set of characters that look alike.
+	 *
+	 * Substituting digits for letters is not enough, because a digit usually imitates more
+	 * than one letter: `1` stands in for both `i` and `l`, so mapping it to either leaves
+	 * `adm1n` and `admin` apart. Every member of a confusable set therefore folds to the same
+	 * character — letters included — which is what makes the comparison symmetric.
+	 *
+	 * Over-collapsing is the accepted cost. It is why the rule only fires when one side of
+	 * the pair can change the site: on a site with several brands, near-collisions between
+	 * ordinary logins are normal and silent.
+	 *
+	 * @param string $login Login.
+	 * @return string
+	 */
+	public static function fold_login( $login ) {
+		$folded = strtolower( trim( (string) $login ) );
+
+		return strtr(
+			$folded,
+			array(
+				'0' => 'o',
+				'1' => 'i',
+				'l' => 'i',
+				'3' => 'e',
+				'4' => 'a',
+				'@' => 'a',
+				'5' => 's',
+				'$' => 's',
+				'7' => 't',
+			)
+		);
+	}
+
+	/**
+	 * Pairs of logins that read the same, where at least one can change the site.
+	 *
+	 * The privilege condition is what keeps this quiet. A site with several brands has
+	 * near-identical logins for honest reasons; a near-identical login next to an
+	 * administrator is the case worth a look.
+	 *
+	 * @param array $accounts Result of all().
+	 * @return array Rows of array( login, twin, privileged_login ).
+	 */
+	public static function lookalike_logins( array $accounts ) {
+		$folded = array();
+
+		foreach ( $accounts['rows'] as $row ) {
+			$key = self::fold_login( $row['login'] );
+
+			// WordPress will not create two accounts with one login, so any collision here is
+			// between different spellings of the same word rather than a duplicate.
+			$folded[ $key ][] = $row;
+		}
+
+		$pairs = array();
+
+		foreach ( $folded as $rows ) {
+			if ( count( $rows ) < 2 ) {
+				continue;
+			}
+
+			$privileged = array();
+
+			foreach ( $rows as $row ) {
+				if ( $row['is_admin'] || ! empty( self::notable( $row['direct'] ) ) ) {
+					$privileged[] = $row['login'];
+				}
+			}
+
+			if ( empty( $privileged ) ) {
+				continue;
+			}
+
+			foreach ( $rows as $row ) {
+				if ( in_array( $row['login'], $privileged, true ) ) {
+					continue;
+				}
+
+				$pairs[] = array(
+					'row'        => $row,
+					'privileged' => $privileged[0],
+				);
+			}
+		}
+
+		return $pairs;
 	}
 
 	/**

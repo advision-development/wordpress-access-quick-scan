@@ -47,6 +47,9 @@ class WPAQS_Sessions {
 		'insomnia',
 	);
 
+	/** Separate networks before one account being signed in from all of them is odd. */
+	const MANY_NETWORKS = 3;
+
 	/**
 	 * Sessions for one account.
 	 *
@@ -134,6 +137,63 @@ class WPAQS_Sessions {
 	}
 
 	/**
+	 * How many separate networks an account is signed in from.
+	 *
+	 * Three or more is the threshold, and the reason is the benign case: a laptop and a
+	 * phone on mobile data are two networks and entirely ordinary, so two would report most
+	 * of the people on a healthy site.
+	 *
+	 * A network here is the address with its host part dropped — the first two octets of an
+	 * IPv4 address, the first three groups of an IPv6 one. Coarse on purpose: the question is
+	 * "several unrelated places at once", and a finer prefix would separate two addresses
+	 * from the same office.
+	 *
+	 * @param array $sessions Result of for_user().
+	 * @return array Network prefixes.
+	 */
+	public static function networks( array $sessions ) {
+		$networks = array();
+
+		foreach ( self::addresses( $sessions ) as $address ) {
+			$prefix = self::network_of( $address );
+
+			if ( '' !== $prefix ) {
+				$networks[ $prefix ] = true;
+			}
+		}
+
+		return array_keys( $networks );
+	}
+
+	/**
+	 * The network part of an address.
+	 *
+	 * @param string $address IPv4 or IPv6 address.
+	 * @return string
+	 */
+	public static function network_of( $address ) {
+		$address = trim( (string) $address );
+
+		if ( '' === $address ) {
+			return '';
+		}
+
+		if ( false !== strpos( $address, ':' ) ) {
+			$groups = explode( ':', $address );
+
+			return implode( ':', array_slice( $groups, 0, 3 ) );
+		}
+
+		$octets = explode( '.', $address );
+
+		if ( count( $octets ) < 2 ) {
+			return '';
+		}
+
+		return $octets[0] . '.' . $octets[1];
+	}
+
+	/**
 	 * Findings for one account's sessions.
 	 *
 	 * @param array $account  One row from WPAQS_Accounts::all().
@@ -142,6 +202,21 @@ class WPAQS_Sessions {
 	 */
 	public static function findings( array $account, array $sessions ) {
 		$findings = array();
+
+		$networks = self::networks( $sessions );
+
+		if ( count( $networks ) >= self::MANY_NETWORKS ) {
+			$findings[] = WPAQS_Findings::make(
+				'sessions_many_networks',
+				'user:' . $account['id'] . ':networks',
+				sprintf(
+					'login=%1$s sessions=%2$d networks=%3$s',
+					$account['login'],
+					count( $sessions ),
+					implode( ',', $networks )
+				)
+			);
+		}
 
 		foreach ( $sessions as $session ) {
 			if ( ! self::is_scripted( $session['ua'] ) ) {
