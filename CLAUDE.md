@@ -203,6 +203,12 @@ browser sessions alone. An operator who thinks one covers the other leaves a key
 recording why something is never called names the very thing being forbidden.
 `test-markup.php` has `code_only()`, and `test-actions.php` does the same inline.
 
+**The screen states its own version, and that is not decoration.** "The sections do not
+fold" and "you are running last week's zip" are indistinguishable over a screenshot. `dist/`
+is no help either: `build.sh` writes one file per version, so rebuilding without bumping
+overwrites the artifact that would have settled it. When a report arrives about behaviour
+that was changed recently, read the version on the screenshot before reading the code.
+
 ## Testing
 
 WordPress functions are stubbed in `tests/wp-stubs.php`, guarded by `function_exists` so a

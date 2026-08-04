@@ -109,6 +109,14 @@ $page_code       = code_only( $source );
 
 check( 'the admin page is readable', '' !== $source );
 
+// The screen states its own version. "The sections do not fold" and "you are running an
+// older zip" look the same over a screenshot, and only one of them is a bug.
+check(
+	'the screen shows which version rendered it',
+	false !== strpos( $source, 'esc_html( WPAQS_VERSION )' ),
+	'a version on screen turns a guess into a glance'
+);
+
 // A form that opens and never closes swallows whatever follows it.
 $opens  = preg_match_all( '~<form[\s>]~', $source );
 $closes = preg_match_all( '~</form>~', $source );

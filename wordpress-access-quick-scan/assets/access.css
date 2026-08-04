@@ -214,3 +214,12 @@ details.wpaqs-card > summary::before {
 	top: -0.1rem;
 	border-left-color: #646970;
 }
+
+/* Quiet, but present. It answers "which build am I looking at" without competing with the
+   heading. */
+.wpaqs-version {
+	font-size: 12px;
+	font-weight: 400;
+	color: #646970;
+	vertical-align: middle;
+}

@@ -95,7 +95,13 @@ class WPAQS_Admin_Page {
 		$findings = WPAQS_Findings::sorted( $findings );
 		?>
 		<div class="wrap wpaqs">
-			<h1><?php esc_html_e( 'Access Check', 'wpaqs' ); ?></h1>
+			<h1>
+				<?php esc_html_e( 'Access Check', 'wpaqs' ); ?>
+				<?php // On the screen on purpose. "The sections do not fold" and "you are running
+					// last week's zip" look identical over a screenshot, and one of them is not a
+					// bug. A version an operator can read makes that a single glance. ?>
+				<span class="wpaqs-version"><?php echo esc_html( WPAQS_VERSION ); ?></span>
+			</h1>
 
 			<p class="description">
 				<?php esc_html_e( 'Who has access to this site right now, read live from the database every time you open this screen. It does not look at files or WordPress core — that is what Malware Quick Scan is for.', 'wpaqs' ); ?>

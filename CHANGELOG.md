@@ -3,6 +3,15 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.1.3
+
+**The screen states its own version.** A report that the sections do not fold and a report
+that the installed zip predates the change that made them fold look identical over a
+screenshot, and only one of them is a bug. The version sits beside the heading so that is a
+glance rather than an investigation. Found the hard way: the first evidence that folding was
+missing was a screenshot of a build that did not have it, and `dist/` had already been
+overwritten, so the zip could not settle it either.
+
 ## 0.1.2
 
 **Every section folds now, and so does every card inside the findings.** With five rules
