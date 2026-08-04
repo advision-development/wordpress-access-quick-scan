@@ -192,10 +192,13 @@ check(
 );
 
 // A single session can only be ended where WordPress keeps sessions in user meta. Offering
-// the button on a site with a custom manager would appear to work and change nothing.
+// the button on a site with a custom manager would appear to work and change nothing. The
+// gate moved into WPAQS_Sessions::controls(), where test-sessions.php counts what it returns
+// instead of reading a condition — so this asserts the gate is inside that one decision
+// rather than in the template, and nothing here reintroduces a second copy.
 check(
 	'the single-session control is gated on the storage being the usual one',
-	false !== strpos( $source, 'WPAQS_Sessions::can_end_one()' ),
+	false !== strpos( code_only( file_get_contents( dirname( __DIR__ ) . '/wordpress-access-quick-scan/includes/class-sessions.php' ) ), 'self::can_end_one()' ),
 	'a custom session manager keeps them somewhere this cannot write'
 );
 
@@ -527,32 +530,21 @@ check(
 	false !== strpos( $source, "esc_html_e( 'never used'" )
 );
 
-// Two buttons for one outcome is a reader wondering what the difference is: with a single
-// session "End this session" and the bulk control are the same press.
+// Which controls a row carries is decided in WPAQS_Sessions::controls() and counted in
+// test-sessions.php. What the template must not do is decide it again here — two copies of
+// this rule is how a single session ended up with two buttons and then with none.
 check(
-	'the bulk control is withheld when there is one session',
-	false !== strpos( $page_code, "count( \$rows_sessions ) > 1 || ! \$per_session" ),
-	'with one session it does exactly what the per-session button does'
+	'the template asks for the controls rather than working them out',
+	false !== strpos( $page_code, "WPAQS_Sessions::controls( count( \$rows_sessions ) )" )
+	&& false !== strpos( $page_code, "\$controls['per_session']" )
+	&& false !== strpos( $page_code, "\$controls['bulk']" ),
+	'two copies of the rule is how one session ended up with two buttons and then with none'
 );
 
 check(
-	'and the per-session button is withheld too',
-	false !== strpos( $page_code, "'' !== \$session['verifier'] && count( \$rows_sessions ) > 1" ),
-	'whichever one is shown, exactly one is'
-);
-
-// The bulk button is still the only route when the site replaces the session manager, since
-// ending one session needs the default one.
-check(
-	'a single session still gets a button when per-session ending is unavailable',
-	false !== strpos( $page_code, '! $per_session' ),
-	'a custom session manager leaves the bulk control as the only route'
-);
-
-check(
-	'and no button at all when there are no sessions',
-	false !== strpos( $page_code, '! empty( $rows_sessions )' ),
-	'the plural would otherwise read "End all 0 sessions"'
+	'and does not re-derive it from can_end_one',
+	false === strpos( $page_code, 'WPAQS_Sessions::can_end_one()' ),
+	'that is the condition controls() already folds in'
 );
 
 check(

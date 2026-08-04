@@ -409,6 +409,9 @@ class WPAQS_Admin_Page {
 					<?php foreach ( $accounts['rows'] as $row ) : ?>
 						<?php
 						$rows_sessions = isset( $sessions[ $row['id'] ] ) ? $sessions[ $row['id'] ] : array();
+						// Which controls this row carries is decided in one place, and tested by
+						// counting buttons rather than by reading this file.
+						$controls      = WPAQS_Sessions::controls( count( $rows_sessions ) );
 						$refusal       = WPAQS_Controller::session_refusal( $row['id'] );
 						?>
 						<tr>
@@ -448,7 +451,7 @@ class WPAQS_Admin_Page {
 
 												<?php // One session, so an administrator can close a scripted one without
 													// signing themselves out. Its own form, a sibling of the others. ?>
-												<?php if ( WPAQS_Sessions::can_end_one() && '' !== $session['verifier'] && count( $rows_sessions ) > 1 ) : ?>
+												<?php if ( $controls['per_session'] && '' !== $session['verifier'] ) : ?>
 													<br />
 													<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
 														onsubmit="return confirm( '<?php echo esc_js( __( 'End this one session? Every other session on the account stays open, including your own if this is your account. Whoever held it has to sign in again.', 'wpaqs' ) ); ?>' );">
@@ -463,17 +466,7 @@ class WPAQS_Admin_Page {
 										<?php endforeach; ?>
 									</ul>
 
-									<?php
-									// The bulk control only when it does something the per-session one cannot.
-									// With a single session the two are the same press, and two buttons for one
-									// outcome is a reader wondering what the difference is.
-									$per_session = WPAQS_Sessions::can_end_one();
-									// Nothing to end is also a reason not to offer the button: with no sessions
-									// the plural would read "End all 0 sessions".
-									$show_bulk   = '' === $refusal && ! empty( $rows_sessions )
-										&& ( count( $rows_sessions ) > 1 || ! $per_session );
-									?>
-									<?php if ( $show_bulk ) : ?>
+									<?php if ( $controls['bulk'] && '' === $refusal ) : ?>
 										<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
 											onsubmit="return confirm( '<?php echo esc_js( __( 'End every session for this account? It is signed out everywhere and has to sign in again — nothing is deleted and no password changes. Application passwords keep working; revoke those separately.', 'wpaqs' ) ); ?>' );">
 											<input type="hidden" name="action" value="wpaqs_end_sessions" />

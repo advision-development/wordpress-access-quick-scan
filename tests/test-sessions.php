@@ -250,4 +250,67 @@ check( 'and the other session is untouched', isset( $GLOBALS['tokens'][1]['hash-
 
 $GLOBALS['filtered'] = array();
 
+// -------------------------------------------------------------- which controls show
+
+/**
+ * How many ending controls a row with this many sessions carries.
+ *
+ * Counting them is the assertion that matters. Reading the template for the condition
+ * cannot catch the case where both conditions are false — which is exactly what happened:
+ * "End this session" and "End these sessions" appeared side by side for a single session,
+ * both were then gated on the count, and a single session got no button at all.
+ *
+ * @param int  $sessions How many sessions.
+ * @param bool $default  Whether the site uses the default session manager.
+ * @return int
+ */
+function controls_for( $sessions, $default = true ) {
+	$GLOBALS['filtered'] = $default ? array() : array( 'session_token_manager' => 'Acme_Redis_Session_Tokens' );
+
+	$controls = WPAQS_Sessions::controls( $sessions );
+
+	// The per-row control is drawn once per session; the bulk one once for the account.
+	return ( $controls['per_session'] ? $sessions : 0 ) + ( $controls['bulk'] ? 1 : 0 );
+}
+
+check(
+	'one session gets exactly one control',
+	1 === controls_for( 1 ),
+	'both is a reader wondering what the difference is; neither is no way to end it'
+);
+
+$GLOBALS['filtered'] = array();
+
+check(
+	'and it is the per-session one',
+	true === WPAQS_Sessions::controls( 1 )['per_session'] && false === WPAQS_Sessions::controls( 1 )['bulk']
+);
+
+// A site that replaces the session manager cannot end one session, so the bulk control is
+// the only route and has to appear even for a single session.
+check(
+	'one session still gets one control without the default manager',
+	1 === controls_for( 1, false ),
+	'ending a single session needs the default manager; ending all of them does not'
+);
+
+$GLOBALS['filtered'] = array( 'session_token_manager' => 'Acme_Redis_Session_Tokens' );
+
+check(
+	'and it is the bulk one',
+	false === WPAQS_Sessions::controls( 1 )['per_session'] && true === WPAQS_Sessions::controls( 1 )['bulk']
+);
+
+// Three sessions: one button each, plus the bulk one, which now does something the others
+// cannot.
+check( 'three sessions get four controls', 4 === controls_for( 3 ), (string) controls_for( 3 ) );
+check( 'three sessions without the default manager get one', 1 === controls_for( 3, false ) );
+
+// Nothing to end is a reason not to offer anything: the plural would read "End all 0
+// sessions", and there is nothing behind it.
+check( 'no sessions get no controls', 0 === controls_for( 0 ), (string) controls_for( 0 ) );
+check( 'and neither does a negative count', 0 === controls_for( -1 ) );
+
+$GLOBALS['filtered'] = array();
+
 finish();

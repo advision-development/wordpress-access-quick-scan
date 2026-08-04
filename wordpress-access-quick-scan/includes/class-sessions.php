@@ -191,6 +191,41 @@ class WPAQS_Sessions {
 	}
 
 	/**
+	 * Which ending controls a row should carry.
+	 *
+	 * This is a function rather than two conditions in the template because the template got
+	 * it wrong twice in one sitting: first offering both controls for a single session, where
+	 * they are the same press, and then — fixing that by gating both on the count — offering
+	 * neither. Counting rendered buttons is the only assertion that catches the second, and
+	 * it cannot be written against a template.
+	 *
+	 * Exactly one control for one session, whichever of the two can do the job. The per-row
+	 * control needs the default session manager; the bulk one always works, which is why it
+	 * is the fallback rather than the other way round.
+	 *
+	 * @param int $count How many sessions the account has.
+	 * @return array array( per_session, bulk )
+	 */
+	public static function controls( $count ) {
+		$count = (int) $count;
+
+		if ( $count < 1 ) {
+			// Nothing to end. The bulk label would otherwise read "End all 0 sessions".
+			return array(
+				'per_session' => false,
+				'bulk'        => false,
+			);
+		}
+
+		$per_session = self::can_end_one();
+
+		return array(
+			'per_session' => $per_session,
+			'bulk'        => $count > 1 || ! $per_session,
+		);
+	}
+
+	/**
 	 * End one session, leaving the others alone.
 	 *
 	 * @param int    $user_id  User id.

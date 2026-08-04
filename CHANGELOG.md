@@ -36,9 +36,18 @@ sessions is wonder which one they would be ending.
 
 **One button where there was one press.** With a single session, "End this session" and "End
 these sessions" did the same thing side by side. Now exactly one appears: the per-session
-button when there are several, the bulk one when the site replaces the session manager and
-per-session ending is unavailable, and neither when there are no sessions — where the plural
-would have read "End all 0 sessions". The bulk label names the count.
+button, the bulk one when the site replaces the session manager and per-session ending is
+unavailable, and neither when there are no sessions — where the plural would have read "End
+all 0 sessions". The bulk label names the count.
+
+The first attempt at this gated **both** controls on the count, so a single session got no
+button at all — the same class of fault as a control installed behind an early return, and one
+no assertion could see, because all four assertions read the template for the condition rather
+than counting what it drew. Two conditions being false together is invisible to a test that
+reads either one. The decision now lives in `WPAQS_Sessions::controls()`, which returns which
+controls a row carries, and `test-sessions.php` counts them for zero, one and three sessions
+with the default session manager and without. Reintroducing either bug fails the same
+assertion.
 
 ## 0.4.0
 
