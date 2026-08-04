@@ -303,3 +303,12 @@ th.wpaqs-sorted-desc a { color: #1d2327 }
 	border-color: #2271b1;
 	color: #2271b1;
 }
+
+/*
+ * Expired sessions read as history rather than as something to act on, so the chip is grey
+ * rather than a warning colour: the row is evidence, not a problem to fix.
+ */
+.wpaqs-chip-expired {
+	border-color: #8c8f94;
+	color: #646970;
+}

@@ -31,8 +31,15 @@ writes capabilities into the same place WordPress stores role names, so a Subscr
 edit users still shows as Subscriber on the Users screen. Only capabilities that change the
 site are called out — a direct grant of `read` is noise.
 
-**Live sessions** — WordPress records the IP, the user agent, the login time and the expiry
-of every session that is still open. It is the only access history core keeps.
+**Sessions** — WordPress records the IP, the user agent, the login time and the expiry of
+every session in `session_tokens`. It is the closest thing to access history core keeps.
+
+Expired ones are marked `expired` rather than hidden. WordPress removes a lapsed token only
+when it next writes that meta, so an account that stopped signing in keeps them — which is
+how a sign-in from two years ago appears. They are shown because an old sign-in from an
+address nobody recognises is worth reading, and they are excluded from every claim about
+what is open, including the set of addresses that makes an application password's use look
+familiar.
 
 **Application passwords** — core records `created`, `last_used` and `last_ip`. An
 application password authenticates the REST API as its owner and bypasses the login form, so

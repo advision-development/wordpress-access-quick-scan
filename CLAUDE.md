@@ -140,6 +140,34 @@ string and nothing else.
 
 ## Lessons, most of them inherited
 
+**`session_tokens` does not hold only unexpired sessions.** This file said it did, and so did
+`class-sessions.php`'s own docblock, for four versions.
+`WP_User_Meta_Session_Tokens` prunes expired tokens when it next *writes* the meta — on a login,
+on a session being destroyed — so an account that stopped signing in keeps its lapsed tokens
+indefinitely. A real site showed a 2024 sign-in under a heading reading live sessions.
+
+`expiration` was read into every row and used by nothing, which is the shape to watch for: a
+field collected and never consulted is a claim nobody checked. The rows stay, marked, because
+they are the closest thing to login history core keeps; what changed is that `addresses()` and
+`findings()` read `open()`. The address set is the important one — a match there *suppresses*
+the unfamiliar-address finding, so a lapsed session vouching for its address forever is a false
+negative, not a cosmetic error.
+
+A zero or missing expiry is **not** expired. That is meta this class could not read, and
+"closed" is a claim as much as "open" is.
+
+**Fixtures are relative to `time()`, never absolute.** `test-sessions.php` wrote
+`expiration => 1760000000`, in the future when written and in the past now, so every session in
+it silently became expired and five assertions began failing for a reason unrelated to the code.
+A test that passes only until a date is a test that will mislead somebody mid-incident.
+
+**Two conditions being false together is invisible to an assertion that reads either one.**
+The single-session ending control shipped twice broken: two buttons where one press exists,
+then — gating both on the count — no button at all. Four assertions read the template for the
+string `count( $rows_sessions ) > 1` and all four passed both times. Counting what the row
+draws is the only assertion that sees it, and it cannot be written against a template, which
+is why `WPAQS_Sessions::controls()` exists and returns which controls a row carries.
+
 The sibling paid for these. Do not undo them here.
 
 **Sharing code between two WordPress plugins is not possible.** Both active, both shipping

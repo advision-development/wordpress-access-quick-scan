@@ -411,7 +411,8 @@ class WPAQS_Admin_Page {
 						$rows_sessions = isset( $sessions[ $row['id'] ] ) ? $sessions[ $row['id'] ] : array();
 						// Which controls this row carries is decided in one place, and tested by
 						// counting buttons rather than by reading this file.
-						$controls      = WPAQS_Sessions::controls( count( $rows_sessions ) );
+						$rows_open     = WPAQS_Sessions::open( $rows_sessions );
+						$controls      = WPAQS_Sessions::controls( count( $rows_open ) );
 						$refusal       = WPAQS_Controller::session_refusal( $row['id'] );
 						?>
 						<tr>
@@ -431,12 +432,25 @@ class WPAQS_Admin_Page {
 								<?php if ( empty( $rows_sessions ) ) : ?>
 									<span class="description"><?php esc_html_e( 'none open', 'wpaqs' ); ?></span>
 								<?php else : ?>
+									<?php // Every stored session has lapsed. Saying only "none open" would throw
+										// away the addresses and dates, which are the only login history
+										// WordPress keeps — so the note goes above the list rather than
+										// replacing it. ?>
+									<?php if ( empty( $rows_open ) ) : ?>
+										<span class="description"><?php esc_html_e( 'none open — every session below has expired, and is shown because it is the only login history WordPress keeps', 'wpaqs' ); ?></span>
+									<?php endif; ?>
 									<ul class="wpaqs-sessions">
 										<?php foreach ( $rows_sessions as $session ) : ?>
 											<li>
 												<code><?php echo esc_html( '' === $session['ip'] ? __( 'no address recorded', 'wpaqs' ) : $session['ip'] ); ?></code>
 												<?php if ( WPAQS_Sessions::is_scripted( $session['ua'] ) ) : ?>
 													<span class="wpaqs-chip"><?php esc_html_e( 'not a browser', 'wpaqs' ); ?></span>
+												<?php endif; ?>
+												<?php // WordPress prunes expired tokens only when it next writes the
+													// meta, so an account that stopped signing in keeps them. Without
+													// this chip a sign-in from two years ago reads as open. ?>
+												<?php if ( ! empty( $session['expired'] ) ) : ?>
+													<span class="wpaqs-chip wpaqs-chip-expired"><?php esc_html_e( 'expired', 'wpaqs' ); ?></span>
 												<?php endif; ?>
 												<?php // Knowing which one is yours matters before pressing anything that
 													// ends a session, and today the only clue is recognising the address. ?>
@@ -451,7 +465,7 @@ class WPAQS_Admin_Page {
 
 												<?php // One session, so an administrator can close a scripted one without
 													// signing themselves out. Its own form, a sibling of the others. ?>
-												<?php if ( $controls['per_session'] && '' !== $session['verifier'] ) : ?>
+												<?php if ( $controls['per_session'] && '' !== $session['verifier'] && empty( $session['expired'] ) ) : ?>
 													<br />
 													<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
 														onsubmit="return confirm( '<?php echo esc_js( __( 'End this one session? Every other session on the account stays open, including your own if this is your account. Whoever held it has to sign in again.', 'wpaqs' ) ); ?>' );">

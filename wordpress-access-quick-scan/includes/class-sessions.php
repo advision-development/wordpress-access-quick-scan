@@ -2,13 +2,21 @@
 /**
  * Live sessions — the only access history WordPress core keeps.
  *
- * `session_tokens` user meta holds one entry per session that has not expired, and each
- * entry records the IP it was opened from, the user agent that opened it, the login time
- * and the expiry. Nothing else in core records who connected from where.
+ * `session_tokens` user meta holds one entry per session, and each entry records the IP it
+ * was opened from, the user agent that opened it, the login time and the expiry. Nothing
+ * else in core records who connected from where.
  *
- * What that means for this plugin: a session that expired, or that was destroyed, leaves
- * nothing behind. There is no login history to read, only what is still open. The screen
- * says so rather than letting the list imply completeness.
+ * **It does not hold only unexpired sessions**, which this file claimed for four versions
+ * and which is the assumption that made the screen wrong. `WP_User_Meta_Session_Tokens`
+ * prunes expired tokens when it next *writes* the meta — on a login, on a session being
+ * destroyed — so an account that stopped signing in keeps its lapsed tokens indefinitely.
+ * A real site showed a sign-in from 2024 under a heading reading "live sessions".
+ *
+ * So every entry carries `expired`, and the callers that make a claim about *now* —
+ * `addresses()`, `findings()` — read `open()` rather than the raw list. A destroyed session
+ * still leaves nothing behind, so the list is not login history in general; what it holds is
+ * whatever WordPress has not got round to deleting, which is more than what is open and far
+ * less than everything.
  *
  * Read-only.
  *
@@ -75,6 +83,7 @@ class WPAQS_Sessions {
 					'ua'         => '',
 					'login'      => 0,
 					'expiration' => 0,
+					'expired'    => false,
 					'readable'   => false,
 				);
 
@@ -91,6 +100,14 @@ class WPAQS_Sessions {
 					'ua'         => isset( $session['ua'] ) ? (string) $session['ua'] : '',
 					'login'      => isset( $session['login'] ) ? (int) $session['login'] : 0,
 					'expiration' => isset( $session['expiration'] ) ? (int) $session['expiration'] : 0,
+					// An expiry in the past means WordPress rejects the cookie, so the session
+					// is not open — but the row stays, because the meta is only pruned on the
+					// next write. See the file docblock.
+					//
+					// A missing or zero expiry is not read as expired: that is meta this class
+					// could not understand, and "closed" is a claim as much as "open" is.
+					'expired'    => isset( $session['expiration'] ) && (int) $session['expiration'] > 0
+						&& (int) $session['expiration'] < time(),
 					'readable'   => true,
 				);
 		}
@@ -133,12 +150,36 @@ class WPAQS_Sessions {
 		$addresses = array();
 
 		foreach ( $sessions as $session ) {
-			if ( '' !== $session['ip'] ) {
+			// Expired sessions are excluded, and this is why the flag exists. This set is what
+			// WPAQS_App_Passwords::findings() treats as addresses the account is known to work
+			// from, and a match there *suppresses* a finding. A lapsed session WordPress never
+			// pruned would vouch for its address forever, so an application password used from
+			// that address today would read as familiar — a false negative on the one check
+			// this screen makes about a credential being used from somewhere new.
+			if ( '' !== $session['ip'] && empty( $session['expired'] ) ) {
 				$addresses[ $session['ip'] ] = true;
 			}
 		}
 
 		return array_keys( $addresses );
+	}
+
+	/**
+	 * The sessions that are actually open.
+	 *
+	 * @param array $sessions Result of for_user().
+	 * @return array
+	 */
+	public static function open( array $sessions ) {
+		$live = array();
+
+		foreach ( $sessions as $session ) {
+			if ( empty( $session['expired'] ) ) {
+				$live[] = $session;
+			}
+		}
+
+		return $live;
 	}
 
 	/**
@@ -326,6 +367,10 @@ class WPAQS_Sessions {
 	public static function findings( array $account, array $sessions ) {
 		$findings = array();
 
+		// Every rule below reads the open sessions. The catalog wording says "live" and "at
+		// once", and both would be untrue of an account carrying lapsed tokens WordPress has
+		// not pruned.
+		$sessions = self::open( $sessions );
 		$networks = self::networks( $sessions );
 
 		if ( count( $networks ) >= self::MANY_NETWORKS ) {

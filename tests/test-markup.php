@@ -535,7 +535,7 @@ check(
 // this rule is how a single session ended up with two buttons and then with none.
 check(
 	'the template asks for the controls rather than working them out',
-	false !== strpos( $page_code, "WPAQS_Sessions::controls( count( \$rows_sessions ) )" )
+	false !== strpos( $page_code, "WPAQS_Sessions::controls( count( \$rows_open ) )" )
 	&& false !== strpos( $page_code, "\$controls['per_session']" )
 	&& false !== strpos( $page_code, "\$controls['bulk']" ),
 	'two copies of the rule is how one session ended up with two buttons and then with none'
@@ -550,6 +550,37 @@ check(
 check(
 	'the count is in the label rather than the reader counting rows',
 	false !== strpos( $source, "_n( 'End this session', 'End all %s sessions'" )
+);
+
+// An expired session must be visibly expired. WordPress prunes expired tokens only when it
+// next writes the meta, so an account that stopped signing in keeps them — and without the
+// chip a sign-in from two years ago reads as an open session on a screen headed live ones.
+check(
+	'an expired session is marked',
+	false !== strpos( $source, "esc_html_e( 'expired'" ),
+	'a two-year-old login otherwise reads as open'
+);
+
+check(
+	'and carries no button to end it',
+	false !== strpos( $page_code, 'empty( $session[\'expired\'] )' ),
+	'ending it would be a press that changes nothing anybody can see'
+);
+
+// Saying only "none open" would throw away the addresses and dates, which are the only login
+// history WordPress keeps.
+check(
+	'an account whose every session has lapsed still shows them',
+	false !== strpos( $page_code, 'empty( $rows_open )' )
+	&& false !== strpos( $source, 'only login history WordPress keeps' ),
+	'the note goes above the list rather than replacing it'
+);
+
+// One list, whichever branch drew it: two would leave one unclosed.
+check(
+	'the session list is opened exactly once',
+	1 === substr_count( $source, 'ul class="wpaqs-sessions"' ),
+	'two opening tags in two branches is one unclosed list'
 );
 
 printf( "\n%d failure(s)\n", $GLOBALS['wpaqs_failures'] );

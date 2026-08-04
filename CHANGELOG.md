@@ -3,6 +3,38 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.5.1
+
+**Sessions that had expired were shown as open.** A real site's list carried a sign-in from
+2024-08-29 under a heading reading live sessions. `session_tokens` does not hold only unexpired
+sessions, which `class-sessions.php` claimed in its own docblock for four versions:
+`WP_User_Meta_Session_Tokens` prunes expired tokens when it next *writes* the meta — on a
+login, on a session being destroyed — so an account that stopped signing in keeps its lapsed
+tokens indefinitely. `expiration` was read into every row and then used by nothing.
+
+The rows stay, marked `expired`, because they are the closest thing to login history core
+keeps and an old sign-in from an address nobody recognises is worth reading even dead. What
+changed is every claim made about them:
+
+- **The false negative, which is the reason this is a fix and not a polish.** `addresses()`
+  is the set of addresses an account is known to work from, and `WPAQS_App_Passwords::findings()`
+  *suppresses* its unfamiliar-address finding on a match. A lapsed session vouched for its
+  address forever, so an application password used from that address today read as familiar.
+  Expired sessions no longer vouch for anything.
+- `sessions_many_networks` and `non_browser_session` read `open()`. The catalog says "live"
+  and "at once"; three lapsed sessions across three networks is neither.
+- No button to end an expired session — a press that changes nothing anybody can see. The
+  bulk control counts the open ones.
+- An account whose every session has lapsed says so **above the list rather than instead of
+  it**, since "none open" alone would throw away the addresses and dates.
+
+A zero or missing expiry is *not* read as expired: that is meta this class could not
+understand, and "closed" is a claim as much as "open" is.
+
+**A fixture had rotted.** `test-sessions.php` wrote `expiration => 1760000000`, in the future
+when it was written and in the past now, so every session in it had silently become expired and
+five assertions failed for a reason unrelated to the code. Fixtures are relative to `time()`.
+
 ## 0.5.0
 
 **A timeline.** Somebody who opens this screen because their site is behaving oddly is not

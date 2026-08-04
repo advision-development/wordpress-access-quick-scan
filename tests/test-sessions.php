@@ -33,6 +33,13 @@ function get_user_meta( $user_id, $key, $single = false ) {
 
 require __DIR__ . '/bootstrap.php';
 
+// Fixtures are relative to now, never absolute. The first version of this harness wrote
+// expiration => 1760000000, which was in the future when it was written and is in the past
+// today — so every session in it silently became expired and the assertions started failing
+// for a reason that had nothing to do with the code.
+$live_until = time() + ( 14 * DAY_IN_SECONDS );
+$lapsed_at  = time() - ( 30 * DAY_IN_SECONDS );
+
 load_class( 'findings' );
 load_class( 'sessions' );
 
@@ -86,8 +93,8 @@ foreach ( $browsers as $agent ) {
 
 $GLOBALS['tokens'] = array(
 	1 => array(
-		'aaa' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 (Macintosh) Chrome/126.0', 'login' => 1750000000, 'expiration' => 1760000000 ),
-		'bbb' => array( 'ip' => '198.51.100.4', 'ua' => 'curl/8.4.0', 'login' => 1750000100, 'expiration' => 1760000100 ),
+		'aaa' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 (Macintosh) Chrome/126.0', 'login' => 1750000000, 'expiration' => $live_until ),
+		'bbb' => array( 'ip' => '198.51.100.4', 'ua' => 'curl/8.4.0', 'login' => 1750000100, 'expiration' => $live_until ),
 	),
 	// Meta written by something that is not WordPress.
 	2 => array( 'ccc' => 'not-an-array' ),
@@ -151,7 +158,7 @@ function sessions_from( array $addresses ) {
 			'ip'         => $address,
 			'ua'         => 'Mozilla/5.0 (Macintosh) Chrome/126.0',
 			'login'      => 1750000000,
-			'expiration' => 1760000000,
+			'expiration' => $live_until,
 			'readable'   => true,
 		);
 	}
@@ -200,11 +207,11 @@ check( 'sessions with no addresses report no networks', array() === $blank );
 // hash.
 $GLOBALS['tokens'] = array(
 	1 => array(
-		'hash-a' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 Chrome/126.0', 'login' => 1750000000, 'expiration' => 1760000000 ),
-		'hash-b' => array( 'ip' => '198.51.100.4', 'ua' => 'curl/8.4.0', 'login' => 1750000100, 'expiration' => 1760000100 ),
+		'hash-a' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 Chrome/126.0', 'login' => 1750000000, 'expiration' => $live_until ),
+		'hash-b' => array( 'ip' => '198.51.100.4', 'ua' => 'curl/8.4.0', 'login' => 1750000100, 'expiration' => $live_until ),
 	),
 	4 => array(
-		'only-one' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 Chrome/126.0', 'login' => 1750000000, 'expiration' => 1760000000 ),
+		'only-one' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 Chrome/126.0', 'login' => 1750000000, 'expiration' => $live_until ),
 	),
 );
 
@@ -312,5 +319,102 @@ check( 'no sessions get no controls', 0 === controls_for( 0 ), (string) controls
 check( 'and neither does a negative count', 0 === controls_for( -1 ) );
 
 $GLOBALS['filtered'] = array();
+
+// ---------------------------------------------------------- expired but still stored
+
+// WP_User_Meta_Session_Tokens prunes expired tokens only when it next writes the meta, so an
+// account that stopped signing in keeps them indefinitely. A login from two years ago
+// therefore appears in session_tokens, and reading it as open is how a screen headed "live
+// sessions" comes to show one.
+$GLOBALS['tokens'] = array(
+	7 => array(
+		'live' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 Chrome/126.0', 'login' => time() - 3600, 'expiration' => $live_until ),
+		'dead' => array( 'ip' => '198.51.100.77', 'ua' => 'Mozilla/5.0 Chrome/109.0', 'login' => time() - ( 700 * DAY_IN_SECONDS ), 'expiration' => $lapsed_at ),
+	),
+);
+
+$mixed = WPAQS_Sessions::for_user( 7 );
+
+check( 'both stored sessions are read', 2 === count( $mixed ), (string) count( $mixed ) );
+
+$by_verifier = array();
+
+foreach ( $mixed as $session ) {
+	$by_verifier[ $session['verifier'] ] = $session;
+}
+
+check( 'an expiry in the past reads as expired', true === $by_verifier['dead']['expired'] );
+check( 'and one in the future does not', false === $by_verifier['live']['expired'] );
+
+// The row survives rather than being dropped: it is the only login history WordPress keeps,
+// and an old sign-in from an address nobody recognises is worth reading even dead.
+check(
+	'an expired session is kept rather than hidden',
+	isset( $by_verifier['dead'] ),
+	'it is the only login history core keeps'
+);
+
+check( 'only the live one counts as open', 1 === count( WPAQS_Sessions::open( $mixed ) ) );
+check( 'and it is the live one', 'live' === WPAQS_Sessions::open( $mixed )[0]['verifier'] );
+
+// A zero or missing expiry is meta this class could not read. Calling it expired is a claim,
+// and "not checked" is not "closed".
+$GLOBALS['tokens'] = array(
+	8 => array( 'odd' => array( 'ip' => '10.0.0.1', 'ua' => 'Mozilla/5.0', 'login' => time() ) ),
+);
+
+check(
+	'a missing expiry is not read as expired',
+	false === WPAQS_Sessions::for_user( 8 )[0]['expired'],
+	'that is meta this class could not read, and claiming it is closed is a claim'
+);
+
+// ---- the false negative this flag exists to close
+
+// addresses() is what WPAQS_App_Passwords::findings() treats as addresses the account is
+// known to work from, and a match there suppresses a finding. A dead session vouching for
+// its address forever means a password used from that address today reads as familiar.
+$dead_only = array(
+	array( 'verifier' => 'd', 'ip' => '198.51.100.77', 'ua' => 'Mozilla/5.0', 'login' => 0, 'expiration' => $lapsed_at, 'expired' => true, 'readable' => true ),
+);
+
+check(
+	'an expired session does not vouch for its address',
+	array() === WPAQS_Sessions::addresses( $dead_only ),
+	'otherwise a password used from that address today reads as familiar'
+);
+
+check(
+	'and a live one does',
+	array( '203.0.113.9' ) === WPAQS_Sessions::addresses(
+		array( array( 'verifier' => 'l', 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0', 'login' => 0, 'expiration' => $live_until, 'expired' => false, 'readable' => true ) )
+	)
+);
+
+// The rules say "live" and "at once", so they read the open ones. Three dead sessions across
+// three networks is not an account signed in from three networks at once.
+$three_dead = array();
+
+foreach ( array( '203.0.113.9', '198.51.100.4', '192.0.2.7' ) as $index => $ip ) {
+	$three_dead[] = array( 'verifier' => 'd' . $index, 'ip' => $ip, 'ua' => 'Mozilla/5.0', 'login' => 0, 'expiration' => $lapsed_at, 'expired' => true, 'readable' => true );
+}
+
+check(
+	'three expired sessions are not three networks at once',
+	array() === WPAQS_Sessions::findings( array( 'id' => 7, 'login' => 'stale' ), $three_dead ),
+	'the catalog wording says live and at once, and neither would be true'
+);
+
+// A scripted session that has expired is history rather than something running now, and the
+// finding tells the reader to end it.
+$dead_script = array(
+	array( 'verifier' => 'd', 'ip' => '10.0.0.1', 'ua' => 'curl/8.4.0', 'login' => 0, 'expiration' => $lapsed_at, 'expired' => true, 'readable' => true ),
+);
+
+check(
+	'an expired scripted session is not reported as one running',
+	array() === WPAQS_Sessions::findings( array( 'id' => 7, 'login' => 'stale' ), $dead_script ),
+	'the recommendation is to end it, and there is nothing to end'
+);
 
 finish();
