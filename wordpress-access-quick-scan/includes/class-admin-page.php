@@ -436,7 +436,10 @@ class WPAQS_Admin_Page {
 		$holders = WPAQS_Accounts::code_holders( $accounts );
 		$editing = WPAQS_Accounts::file_editing_allowed();
 		?>
-		<details class="wpaqs-card wpaqs-collapsible" open>
+		<?php // Closed by default. On a healthy site this list is the same every visit, and the
+			// count in the summary is the part that changes — a number that moved is the reason
+			// to open it. ?>
+		<details class="wpaqs-card wpaqs-collapsible">
 			<summary>
 				<h2><?php esc_html_e( 'Who can run code', 'wpaqs' ); ?></h2>
 				<span class="description">

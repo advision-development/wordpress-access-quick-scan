@@ -137,13 +137,23 @@ only capabilities that change the site are reported, because a direct grant of `
 noise. The sibling shipped a heuristic that matched a football site's own editorial content
 and had to narrow it; the lesson is to say what a rule cannot know.
 
-**`registered_after_first_post` is the only rule here that is not a heuristic.** A post
-cannot predate its author, because `wp_insert_post()` requires one that exists. It reads
-**both** date columns: a row written straight into the database often carries a local
-`post_date` and a zero `post_date_gmt`, so reading only the GMT column would hide precisely
-the rows the rule is for. The sibling learned that exact lesson as `post_without_gmt_date`.
-`WPAQS_Authorship::TOLERANCE` exists because an import can land registration and first post
-in the same moment.
+**Nothing here is arithmetic. `content_predates_account` was claimed to be, and was not.**
+`wp_insert_post()` will not write a post older than its author, which is true and was mistaken
+for proof — `wp_delete_user( $id, $reassign )` moves a deleted account's posts to another one
+and they keep their dates, so an ordinary tidy-up of the user list produces it. Shipped at
+critical saying there was no ordinary explanation; corrected to medium within a day, on a real
+site's report.
+
+WordPress records nothing about a reassignment, so the rule **cannot** separate the two. What
+it does instead is report the discriminator and leave the judgement with the operator: the
+oldest post, the **newest**, and the **count**. A span of years across hundreds of posts is
+inherited work; a single post shortly before the account is not. **When a rule cannot decide,
+its job is to hand over what it read** — not to pick the more alarming reading.
+
+It reads **both** date columns for the same reason the sibling's `post_without_gmt_date` does:
+a row written straight into the database often carries a local `post_date` and a zero
+`post_date_gmt`. `TOLERANCE` exists because an import can land registration and first post in
+the same moment.
 
 **A confusable-character fold has to be symmetric.** Mapping digits onto letters is not
 enough: `1` imitates both `i` and `l`, so mapping it to either leaves `adm1n` and `admin`

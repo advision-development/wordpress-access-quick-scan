@@ -1,14 +1,18 @@
 <?php
 /**
- * Accounts whose own content predates them.
+ * Accounts holding content older than themselves.
  *
- * `wp_insert_post()` requires an author that already exists, so a post cannot be older
- * than the account that wrote it. When one is, the row did not arrive through WordPress:
- * something wrote the database directly, which is the vector that makes rotating a
- * password useless.
+ * `wp_insert_post()` requires an author that already exists, so nothing can *write* a post
+ * older than its author. Reported as arithmetic in 0.2.0 on that basis, which was wrong:
+ * `wp_delete_user( $id, $reassign )` moves a deleted account's posts to another account and
+ * the posts keep their original dates. Deleting a colleague and reassigning their work is an
+ * ordinary thing to do, and it produces this exactly.
  *
- * This is the only rule in the plugin that is not a heuristic. Everything else here is a
- * shortlist to confirm; this one is arithmetic.
+ * WordPress records nothing about a reassignment — no marker, no meta, no log — so this
+ * cannot tell one from a row planted directly in the database. It reports the span of the
+ * content instead and leaves the judgement where the knowledge is: a body of posts covering
+ * years before the account existed is somebody else's work inherited, and a single post a
+ * fortnight before it is not.
  *
  * Read-only.
  *
@@ -68,7 +72,10 @@ class WPAQS_Authorship {
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- placeholders are generated above, values are bound.
-				"SELECT post_author, MIN( post_date_gmt ) AS oldest_gmt, MIN( post_date ) AS oldest_local
+				"SELECT post_author,
+				        MIN( post_date_gmt ) AS oldest_gmt, MIN( post_date ) AS oldest_local,
+				        MAX( post_date_gmt ) AS newest_gmt, MAX( post_date ) AS newest_local,
+				        COUNT( * ) AS posts
 				 FROM {$wpdb->posts}
 				 WHERE post_author > 0
 				   AND post_type NOT IN ( {$placeholders} )
@@ -85,10 +92,14 @@ class WPAQS_Authorship {
 		$earliest = array();
 
 		foreach ( $rows as $row ) {
-			$stamp = self::usable_stamp( $row );
+			$stamp = self::usable_stamp( $row, 'oldest_gmt', 'oldest_local', 'min' );
 
 			if ( $stamp > 0 ) {
-				$earliest[ (int) $row->post_author ] = $stamp;
+				$earliest[ (int) $row->post_author ] = array(
+					'oldest' => $stamp,
+					'newest' => self::usable_stamp( $row, 'newest_gmt', 'newest_local', 'max' ),
+					'posts'  => isset( $row->posts ) ? (int) $row->posts : 0,
+				);
 			}
 		}
 
@@ -96,15 +107,22 @@ class WPAQS_Authorship {
 	}
 
 	/**
-	 * The earlier of the two date columns, ignoring a zero GMT date.
+	 * One of the two date columns, ignoring a zero GMT date.
 	 *
-	 * @param object $row Row with oldest_gmt and oldest_local.
+	 * Both are read because a row written straight into the database frequently carries a
+	 * local date and leaves the GMT column at zero — reading only the GMT column would hide
+	 * the rows most worth seeing.
+	 *
+	 * @param object $row   Row from the grouped query.
+	 * @param string $gmt   GMT column name.
+	 * @param string $local Local column name.
+	 * @param string $pick  'min' for the earliest, 'max' for the latest.
 	 * @return int Unix timestamp, or 0 when neither column is usable.
 	 */
-	private static function usable_stamp( $row ) {
+	private static function usable_stamp( $row, $gmt, $local, $pick ) {
 		$stamps = array();
 
-		foreach ( array( 'oldest_gmt', 'oldest_local' ) as $field ) {
+		foreach ( array( $gmt, $local ) as $field ) {
 			$value = isset( $row->$field ) ? (string) $row->$field : '';
 
 			if ( '' === $value || 0 === strpos( $value, '0000-00-00' ) ) {
@@ -118,7 +136,11 @@ class WPAQS_Authorship {
 			}
 		}
 
-		return empty( $stamps ) ? 0 : min( $stamps );
+		if ( empty( $stamps ) ) {
+			return 0;
+		}
+
+		return 'max' === $pick ? max( $stamps ) : min( $stamps );
 	}
 
 	/**
@@ -142,20 +164,26 @@ class WPAQS_Authorship {
 				continue;
 			}
 
-			$oldest = (int) $earliest[ $row['id'] ];
+			$content = $earliest[ $row['id'] ];
+			$oldest  = (int) $content['oldest'];
 
 			if ( $oldest >= ( $registered - self::TOLERANCE ) ) {
 				continue;
 			}
 
+			// The span is the discriminator this rule cannot apply itself. Content covering a
+			// stretch of time before the account existed is somebody else's work inherited
+			// through a reassignment; a single post shortly before it is not.
 			$findings[] = WPAQS_Findings::make(
-				'registered_after_first_post',
+				'content_predates_account',
 				'user:' . $row['id'],
 				sprintf(
-					'login=%1$s registered=%2$s oldest_post=%3$s gap=%4$s',
+					'login=%1$s registered=%2$s oldest_post=%3$s newest_post=%4$s posts=%5$d gap=%6$s',
 					$row['login'],
 					gmdate( 'Y-m-d H:i', $registered ) . ' UTC',
 					gmdate( 'Y-m-d H:i', $oldest ) . ' UTC',
+					$content['newest'] > 0 ? gmdate( 'Y-m-d H:i', (int) $content['newest'] ) . ' UTC' : 'unknown',
+					(int) $content['posts'],
 					self::readable_gap( $registered - $oldest )
 				)
 			);

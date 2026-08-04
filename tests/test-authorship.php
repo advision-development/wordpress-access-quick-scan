@@ -1,13 +1,16 @@
 <?php
 /**
- * An account younger than its own oldest post.
+ * An account holding content older than itself.
  *
- * The only rule in this plugin that is arithmetic rather than a heuristic:
- * `wp_insert_post()` requires an author that already exists, so a post cannot predate the
- * account that wrote it. When one does, something wrote the database directly.
+ * Shipped in 0.2.0 as arithmetic rather than a heuristic, which was wrong.
+ * `wp_delete_user( $id, $reassign )` moves a deleted account's posts to another account and
+ * the posts keep their dates, so deleting a colleague and reassigning their work produces
+ * this exactly — and that is an ordinary thing to have done.
  *
- * Which makes the benign cases matter more than usual, not less — a false positive here
- * carries a sentence saying there is no ordinary explanation.
+ * WordPress records nothing about a reassignment, so the rule cannot tell it from a planted
+ * row. These tests therefore pin what it reports rather than what it concludes: the span of
+ * the content and the number of posts, which is the discriminator the operator has and the
+ * rule does not.
  */
 
 /**
@@ -43,11 +46,14 @@ $GLOBALS['wpdb'] = new Stub_Wpdb();
  * @param string $local  MIN( post_date ).
  * @return object
  */
-function post_row( $author, $gmt, $local ) {
+function post_row( $author, $gmt, $local, $newest_gmt = null, $posts = 1 ) {
 	return (object) array(
 		'post_author'   => $author,
 		'oldest_gmt'    => $gmt,
 		'oldest_local'  => $local,
+		'newest_gmt'    => null === $newest_gmt ? $gmt : $newest_gmt,
+		'newest_local'  => null === $newest_gmt ? $local : $newest_gmt,
+		'posts'         => $posts,
 	);
 }
 
@@ -79,15 +85,17 @@ $accounts = array(
 		account( 4, 'no-posts', '2020-01-01 00:00:00' ),
 		account( 5, 'zero-gmt', '2026-07-01 00:00:00' ),
 		account( 6, 'same-second', '2022-02-02 10:00:00' ),
+		account( 7, 'inheritor', '2024-01-01 00:00:00' ),
 	),
-	'total'  => 6,
+	'total'  => 7,
 	'capped' => false,
 );
 
 $GLOBALS['post_rows'] = array(
 	// Wrote after registering. Ordinary.
 	post_row( 1, '2020-06-01 09:00:00', '2020-06-01 09:00:00' ),
-	// Content two years older than the account that owns it. Impossible through WordPress.
+	// One post, two years older than the account that owns it, with nothing around it. The
+	// shape worth opening: a reassignment brings a body of work, not a single row.
 	post_row( 2, '2024-03-04 08:00:00', '2024-03-04 08:00:00' ),
 	// Registered the same day it started writing, an hour later. Ordinary.
 	post_row( 3, '2021-05-05 13:00:00', '2021-05-05 13:00:00' ),
@@ -96,18 +104,24 @@ $GLOBALS['post_rows'] = array(
 	post_row( 5, '0000-00-00 00:00:00', '2025-01-01 00:00:00' ),
 	// Inside the tolerance: registration and first post in the same minute.
 	post_row( 6, '2022-02-02 09:59:30', '2022-02-02 09:59:30' ),
+	// The ordinary explanation: a colleague's account was deleted and their four years of
+	// posts were reassigned here. Reported, but the span is what says which it is.
+	post_row( 7, '2019-01-01 00:00:00', '2019-01-01 00:00:00', '2023-06-01 00:00:00', 412 ),
 );
 
 $earliest = WPAQS_Authorship::earliest_posts();
 
-check( 'a usable GMT date is read', isset( $earliest[1] ) && $earliest[1] === strtotime( '2020-06-01 09:00:00 UTC' ) );
+check( 'a usable GMT date is read', isset( $earliest[1] ) && $earliest[1]['oldest'] === strtotime( '2020-06-01 09:00:00 UTC' ) );
 check( 'an account with no posts is absent', ! isset( $earliest[4] ) );
 
 check(
 	'a zero GMT date falls back to the local column',
-	isset( $earliest[5] ) && $earliest[5] === strtotime( '2025-01-01 00:00:00 UTC' ),
+	isset( $earliest[5] ) && $earliest[5]['oldest'] === strtotime( '2025-01-01 00:00:00 UTC' ),
 	'a row written straight into the database often leaves post_date_gmt at zero'
 );
+
+check( 'the newest post is read too', isset( $earliest[7] ) && $earliest[7]['newest'] === strtotime( '2023-06-01 00:00:00 UTC' ) );
+check( 'and the post count', isset( $earliest[7] ) && 412 === $earliest[7]['posts'] );
 
 $findings = array();
 
@@ -118,7 +132,10 @@ foreach ( WPAQS_Authorship::findings( $accounts, $earliest ) as $finding ) {
 // ------------------------------------------------------------------- it fires
 
 check( 'an account younger than its content is reported', isset( $findings['user:2'] ) );
-check( 'at critical', isset( $findings['user:2'] ) && 'critical' === $findings['user:2']['severity'] );
+
+// Medium, not critical. A reassignment produces this and a reassignment is ordinary, so the
+// finding asks a question rather than announcing a compromise.
+check( 'at medium', isset( $findings['user:2'] ) && 'medium' === $findings['user:2']['severity'], $findings['user:2']['severity'] );
 
 check(
 	'and the evidence names both dates and the gap',
@@ -136,9 +153,41 @@ check(
 );
 
 // The recommendation has to say what the finding means, because the meaning is the point.
+// The wording has to name the ordinary cause first, or the finding reads as an accusation
+// against a site where somebody merely tidied up their users.
 check(
-	'the wording says a password change will not close it',
-	false !== stripos( $findings['user:2']['recommendation'], 'will not close it' )
+	'the detail names reassignment as the ordinary explanation',
+	false !== stripos( $findings['user:2']['detail'], 'reassigned' ),
+	'a deleted colleague is the likeliest cause, not an intrusion'
+);
+
+check(
+	'and the recommendation says what tells the two apart',
+	false !== stripos( $findings['user:2']['recommendation'], 'span' ),
+	'the rule cannot judge it, so it has to hand over what it read'
+);
+
+check(
+	'and admits WordPress records nothing that separates them',
+	false !== stripos( $findings['user:2']['recommendation'], 'records nothing' )
+);
+
+// ------------------------------------------------- the reassignment shape
+
+check( 'a reassignment is reported too', isset( $findings['user:7'] ), 'the rule cannot tell, so it reports and explains' );
+
+check(
+	'and the evidence carries the span and the count',
+	isset( $findings['user:7'] )
+		&& false !== strpos( $findings['user:7']['evidence'], 'newest_post=2023-06-01' )
+		&& false !== strpos( $findings['user:7']['evidence'], 'posts=412' ),
+	'four years of content and 412 posts is what inheriting looks like'
+);
+
+// The single-row shape, which is the one worth opening.
+check(
+	'a single planted post reports one post',
+	isset( $findings['user:2'] ) && false !== strpos( $findings['user:2']['evidence'], 'posts=1' )
 );
 
 // ------------------------------------------------------------- benign cases

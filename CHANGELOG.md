@@ -3,6 +3,27 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.2.1
+
+**The rule shipped yesterday as arithmetic was a heuristic, and a noisy one.** Reported from
+a real site: `wp_delete_user( $id, $reassign )` moves a deleted account's posts to another
+account and the posts keep their original dates, so deleting a colleague and reassigning their
+work produces content older than the account that now owns it. That is an ordinary thing to
+have done, and 0.2.0 called it critical while saying there was no ordinary explanation.
+
+WordPress records nothing about a reassignment — no marker, no meta, no log — so the rule
+cannot tell one from a row planted in the database. It no longer pretends to. Renamed to
+`content_predates_account`, dropped to medium, and the wording names reassignment as the
+likely cause first.
+
+What it does now is hand over the discriminator it cannot apply itself: the evidence carries
+the **newest** post date and the **number** of posts as well as the oldest. Four years of
+content across four hundred posts is somebody else's work inherited; one post a fortnight
+before the account is the shape worth opening. Both shapes are in `test-authorship.php`.
+
+**Who can run code opens closed.** On a healthy site that list is the same every visit, and
+the count in the summary is the part that changes.
+
 ## 0.2.0
 
 **An account cannot be younger than its own oldest post.** `wp_insert_post()` requires an
