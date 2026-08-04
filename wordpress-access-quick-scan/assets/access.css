@@ -232,3 +232,24 @@ details.wpaqs-card > summary::before {
 	gap: 0.5rem;
 	margin: 0.5rem 0 0;
 }
+
+/* Sortable headers. Server-side, so these are links rather than click handlers — no column
+   index arithmetic to get wrong. */
+.wpaqs-sortable a {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	text-decoration: none;
+	color: inherit;
+}
+
+.wpaqs-sortable a:hover { color: #2271b1 }
+
+.wpaqs-sortable .wpaqs-arrow {
+	font-size: 11px;
+	color: #2271b1;
+}
+
+/* The column doing the sorting, so a reader can tell at a glance which one it is. */
+th.wpaqs-sorted-asc a,
+th.wpaqs-sorted-desc a { color: #1d2327 }

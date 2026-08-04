@@ -378,6 +378,52 @@ check(
 	'the constant is the fix, so name it'
 );
 
+// Sorting is server-side: links in the headers, a usort in PHP. The sibling sorts in
+// JavaScript and paid for it twice — column indices shifted by one because the script read
+// `thead th` while the body row starts with a `td`, and sorting installed behind an early
+// return that fired on any table shorter than a page. Neither bug exists without a script.
+check(
+	'this plugin ships no JavaScript at all',
+	array() === glob( dirname( __DIR__ ) . '/wordpress-access-quick-scan/assets/*.js' ),
+	'a client-side sort is where the sibling lost two days'
+);
+
+check(
+	'sorting goes through one helper',
+	false !== strpos( $source, 'WPAQS_Sort::requested(' ) && false !== strpos( $source, 'WPAQS_Sort::apply(' ),
+	'three tables with three copies of the logic is three places to get it wrong'
+);
+
+check(
+	'and every sortable header is drawn by one method',
+	false !== strpos( $source, 'private static function sortable(' )
+);
+
+// Every header count must match the cells its row renders. A header added without its cell
+// is the shape that shifted the sibling's columns.
+$accounts_body = method_body( $source, 'render_accounts' );
+
+check(
+	'the accounts table headers and cells agree',
+	4 === substr_count( $accounts_body, '<th scope="col">' ) + substr_count( $accounts_body, "self::sortable( 'accounts'" )
+		&& 4 === substr_count( $accounts_body, '<td>' ),
+	'a header with no cell shifts every column after it'
+);
+
+// A sort reloads the page, so a section closed by default has to open when its own table is
+// the one sorting — otherwise pressing a header looks like it did nothing.
+check(
+	'a closed section opens when its table is sorted',
+	false !== strpos( $source, "WPAQS_Sort::is_active( 'code' ) ? ' open' : ''" ),
+	'landing back on a shut section reads as nothing having happened'
+);
+
+check(
+	'and each sort link returns to its own section',
+	false !== strpos( $source, "'wpaqs-passwords' )" ) && false !== strpos( $source, "'wpaqs-accounts' )" ),
+	'a reload that lands at the top of the page loses the reader'
+);
+
 // Collapsible sections. Each one is a details, each summary holds its h2 so the heading
 // stays the click target, and every details closes.
 check(

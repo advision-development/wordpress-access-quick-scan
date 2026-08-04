@@ -60,6 +60,15 @@ Stated on the screen too, because "nothing found" is not the same as "nothing th
   plugin makes no network requests and holds no opinion about any of them.
 - **Files, core, and hardening settings.** A different question and a different plugin.
 
+## Sorting
+
+Every table sorts by clicking a column header — application passwords by name, account, created
+or last used, the account list by login or registration date. It happens on the server, so
+sorting is a page reload and each link returns you to the section you were reading.
+
+Sorting is on the underlying value rather than the text: a password that has never been used
+sorts before every real date, because it holds no date at all.
+
 ## The actions
 
 Both have to be pressed by a person, and both act on something confirmed to exist at that

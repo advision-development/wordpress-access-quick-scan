@@ -249,6 +249,24 @@ is no help either: `build.sh` writes one file per version, so rebuilding without
 overwrites the artifact that would have settled it. When a report arrives about behaviour
 that was changed recently, read the version on the screenshot before reading the code.
 
+**Sorting is server-side, and the absence of JavaScript is the feature.** The sibling sorts in
+the browser and paid twice: column indices shifted by one because the script read `thead th`
+while the body row starts with a `td`, and sorting installed behind an early return that fired
+on any table shorter than a page. Neither is available without a script, and this screen can
+afford the reload because it holds no state — no scan, no stored report, live reads only. If
+JavaScript is ever added here, that is a decision to argue for, not a convenience.
+
+`WPAQS_Sort` sorts on the **value**, never the rendered string: a zero timestamp is "never" and
+belongs before every date. Ties break on arrival order **explicitly** — `usort` has been stable
+since PHP 8.0, but 7.4 is the floor and is never executed on this machine, so relying on the
+runtime would work everywhere it is tested and nowhere it matters.
+
+**A sortable header must point at a real column.** Moving the registration date out of the
+account cell into its own column is what made the header meaningful — and the assertion that
+counts headers against `<td>`s immediately caught four headers over three cells, which is the
+sibling's column-shift bug reproduced minutes after writing its description. Keep that
+assertion honest when adding a column.
+
 ## Testing
 
 WordPress functions are stubbed in `tests/wp-stubs.php`, guarded by `function_exists` so a
@@ -262,6 +280,7 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-app-passwords.php` | Unused, foreign address, no recorded address, and a password used from a live session's own IP |
 | `test-registration.php` | The combination fires; each half alone does not; `'0'` is not truthy |
 | `test-actions.php` | The self refusal, the multisite capability, nonce scoping, live existence, and that nothing calls a user delete |
+| `test-sort.php` | The allowlist, per-table isolation, numbers not sorting like text, never-used first, stable ties, and the link reversing the active column |
 | `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |
 | `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap, grouped rendering, and that no evidence is echoed raw |
 

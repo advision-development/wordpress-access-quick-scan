@@ -3,6 +3,33 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.4.0
+
+**The tables sort, on the server.** Application passwords by name, account, created or last
+used; the account list by login or registration date; who-can-run-code by login. Each table
+sorts independently, and pressing the column already sorting reverses it.
+
+No JavaScript, and that is the point rather than an economy. The sibling sorts client-side and
+paid for it twice — column indices shifted by one because the script read `thead th` while the
+body row starts with a `td`, and sorting installed behind an early return that fired on any
+table shorter than one page. Neither bug exists without a script, and this screen can afford a
+reload because it has no state to lose: no scan, no stored report, everything read live on
+every request.
+
+Sorting is on the **data**, not the rendered text, which is the part a client-side sort gets
+wrong: a password never used carries a zero timestamp, so it lands before every real date
+rather than wherever the word "never" falls in the alphabet. Ties keep the order they arrived
+in, or two keys never used would swap places between page loads and the list would look like it
+was changing.
+
+The registration date moved out of the account cell into a column of its own, because a
+sortable header has to point at a column. **Which is how the assertion that counts headers
+against cells caught a genuine off-by-one** — four headers and three cells, the sibling's exact
+column-shift shape, in code written minutes after describing that bug.
+
+A sort reloads the page, so each link carries an anchor back to its own section, and a section
+that is closed by default opens when its own table is the one sorting.
+
 ## 0.3.0
 
 **Every rule that can be cleared from this screen now has the control that clears it.** The

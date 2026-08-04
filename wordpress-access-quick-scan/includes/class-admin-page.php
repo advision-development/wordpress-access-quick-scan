@@ -330,11 +330,31 @@ class WPAQS_Admin_Page {
 	 * @return void
 	 */
 	private static function render_accounts( array $accounts, array $sessions ) {
+		$sort = WPAQS_Sort::requested( 'accounts', array( 'registered', 'login' ) );
+
+		if ( ! WPAQS_Sort::is_active( 'accounts' ) ) {
+			// Newest first, which is the order all() already returns.
+			$sort['dir'] = 'desc';
+		}
+
+		$accounts['rows'] = WPAQS_Sort::apply(
+			$accounts['rows'],
+			$sort['dir'],
+			function ( $row ) use ( $sort ) {
+				if ( 'login' === $sort['key'] ) {
+					return $row['login'];
+				}
+
+				// The stored string, not a timestamp: it is already sortable and parsing it
+				// would turn an unreadable date into a zero that sorts to one end.
+				return $row['registered'];
+			}
+		);
 		?>
 		<?php // Open by default: this table is the answer, not reference material. It folds
 			// because on a membership site it runs to hundreds of rows and somebody reading
 			// the findings above wants it out of the way, not hidden. ?>
-		<details class="wpaqs-card wpaqs-collapsible" open>
+		<details class="wpaqs-card wpaqs-collapsible" id="wpaqs-accounts" open>
 			<summary>
 				<h2><?php esc_html_e( 'Who has access', 'wpaqs' ); ?></h2>
 				<span class="description">
@@ -377,9 +397,10 @@ class WPAQS_Admin_Page {
 			<table class="widefat striped wpaqs-table">
 				<thead>
 					<tr>
-						<th scope="col"><?php esc_html_e( 'Account', 'wpaqs' ); ?></th>
+						<?php self::sortable( 'accounts', 'login', __( 'Account', 'wpaqs' ), $sort, 'wpaqs-accounts' ); ?>
 						<th scope="col"><?php esc_html_e( 'Role and extra capabilities', 'wpaqs' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Live sessions', 'wpaqs' ); ?></th>
+						<?php self::sortable( 'accounts', 'registered', __( 'Registered', 'wpaqs' ), $sort, 'wpaqs-accounts' ); ?>
 					</tr>
 				</thead>
 				<tbody>
@@ -392,15 +413,6 @@ class WPAQS_Admin_Page {
 							<td>
 								<strong><?php echo esc_html( $row['login'] ); ?></strong>
 								<br /><span class="description"><?php echo esc_html( $row['email'] ); ?></span>
-								<br /><span class="description">
-									<?php
-									printf(
-										/* translators: %s: registration date. */
-										esc_html__( 'registered %s', 'wpaqs' ),
-										esc_html( $row['registered'] )
-									);
-									?>
-								</span>
 							</td>
 							<td>
 								<code><?php echo esc_html( empty( $row['roles'] ) ? __( 'no role', 'wpaqs' ) : implode( ', ', $row['roles'] ) ); ?></code>
@@ -457,6 +469,7 @@ class WPAQS_Admin_Page {
 									<?php endif; ?>
 								<?php endif; ?>
 							</td>
+							<td><?php echo esc_html( $row['registered'] ); ?></td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>
@@ -595,11 +608,19 @@ class WPAQS_Admin_Page {
 	private static function render_code_holders( array $accounts ) {
 		$holders = WPAQS_Accounts::code_holders( $accounts );
 		$editing = WPAQS_Accounts::file_editing_allowed();
+		$sort    = WPAQS_Sort::requested( 'code', array( 'login' ) );
+		$holders = WPAQS_Sort::apply(
+			$holders,
+			$sort['dir'],
+			function ( $holder ) {
+				return $holder['account']['login'];
+			}
+		);
 		?>
 		<?php // Closed by default. On a healthy site this list is the same every visit, and the
 			// count in the summary is the part that changes — a number that moved is the reason
 			// to open it. ?>
-		<details class="wpaqs-card wpaqs-collapsible">
+		<details class="wpaqs-card wpaqs-collapsible" id="wpaqs-code"<?php echo WPAQS_Sort::is_active( 'code' ) ? ' open' : ''; ?>>
 			<summary>
 				<h2><?php esc_html_e( 'Who can run code', 'wpaqs' ); ?></h2>
 				<span class="description">
@@ -635,7 +656,7 @@ class WPAQS_Admin_Page {
 				<table class="widefat striped wpaqs-table">
 					<thead>
 						<tr>
-							<th scope="col"><?php esc_html_e( 'Account', 'wpaqs' ); ?></th>
+							<?php self::sortable( 'code', 'login', __( 'Account', 'wpaqs' ), $sort, 'wpaqs-code' ); ?>
 							<th scope="col"><?php esc_html_e( 'Role', 'wpaqs' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'What it can do', 'wpaqs' ); ?></th>
 						</tr>
@@ -714,15 +735,33 @@ class WPAQS_Admin_Page {
 			}
 		}
 
-		// Newest first: a key issued five minutes ago is the one worth looking at.
-		usort(
+		// Newest first by default: a key issued five minutes ago is the one worth looking at.
+		// Sorted on the timestamp rather than the rendered date, so "never" lands where a zero
+		// belongs instead of wherever the word falls in the alphabet.
+		$sort = WPAQS_Sort::requested( 'passwords', array( 'created', 'last_used', 'name', 'account' ) );
+
+		if ( ! WPAQS_Sort::is_active( 'passwords' ) ) {
+			$sort['dir'] = 'desc';
+		}
+
+		$rows = WPAQS_Sort::apply(
 			$rows,
-			function ( $a, $b ) {
-				return (int) $b['password']['created'] - (int) $a['password']['created'];
+			$sort['dir'],
+			function ( $row ) use ( $sort ) {
+				switch ( $sort['key'] ) {
+					case 'last_used':
+						return (int) $row['password']['last_used'];
+					case 'name':
+						return '' === $row['password']['name'] ? $row['password']['uuid'] : $row['password']['name'];
+					case 'account':
+						return $row['account']['login'];
+				}
+
+				return (int) $row['password']['created'];
 			}
 		);
 		?>
-		<details class="wpaqs-card wpaqs-collapsible" open>
+		<details class="wpaqs-card wpaqs-collapsible" id="wpaqs-passwords" open>
 			<summary>
 				<h2><?php esc_html_e( 'Application passwords', 'wpaqs' ); ?></h2>
 				<span class="description">
@@ -746,10 +785,10 @@ class WPAQS_Admin_Page {
 				<table class="widefat striped wpaqs-table">
 					<thead>
 						<tr>
-							<th scope="col"><?php esc_html_e( 'Name', 'wpaqs' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Account', 'wpaqs' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Created', 'wpaqs' ); ?></th>
-							<th scope="col"><?php esc_html_e( 'Last used', 'wpaqs' ); ?></th>
+							<?php self::sortable( 'passwords', 'name', __( 'Name', 'wpaqs' ), $sort, 'wpaqs-passwords' ); ?>
+							<?php self::sortable( 'passwords', 'account', __( 'Account', 'wpaqs' ), $sort, 'wpaqs-passwords' ); ?>
+							<?php self::sortable( 'passwords', 'created', __( 'Created', 'wpaqs' ), $sort, 'wpaqs-passwords' ); ?>
+							<?php self::sortable( 'passwords', 'last_used', __( 'Last used', 'wpaqs' ), $sort, 'wpaqs-passwords' ); ?>
 							<th scope="col"><?php esc_html_e( 'Action', 'wpaqs' ); ?></th>
 						</tr>
 					</thead>
@@ -842,6 +881,33 @@ class WPAQS_Admin_Page {
 				</li>
 			</ul>
 		</details>
+		<?php
+	}
+
+	/**
+	 * One sortable column header.
+	 *
+	 * @param string $table   Table identifier.
+	 * @param string $key     Column key.
+	 * @param string $label   Visible label.
+	 * @param array  $current Result of WPAQS_Sort::requested().
+	 * @param string $anchor  Element id the link returns to.
+	 * @return void
+	 */
+	private static function sortable( $table, $key, $label, array $current, $anchor ) {
+		$indicator = WPAQS_Sort::indicator( $key, $current );
+		?>
+		<th scope="col" class="wpaqs-sortable <?php echo esc_attr( '' === $indicator ? '' : 'wpaqs-sorted-' . $indicator ); ?>">
+			<a href="<?php echo esc_url( WPAQS_Sort::url( $table, $key, $current, $anchor ) ); ?>">
+				<?php echo esc_html( $label ); ?>
+				<?php if ( '' !== $indicator ) : ?>
+					<span class="wpaqs-arrow" aria-hidden="true"><?php echo 'asc' === $indicator ? '&uarr;' : '&darr;'; ?></span>
+					<span class="screen-reader-text">
+						<?php echo esc_html( 'asc' === $indicator ? __( 'sorted ascending', 'wpaqs' ) : __( 'sorted descending', 'wpaqs' ) ); ?>
+					</span>
+				<?php endif; ?>
+			</a>
+		</th>
 		<?php
 	}
 
