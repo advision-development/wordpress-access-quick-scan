@@ -170,33 +170,110 @@ class WPAQS_Admin_Page {
 			<?php if ( empty( $findings ) ) : ?>
 				<p><?php esc_html_e( 'Nothing stood out in what this screen can see. That is not the same as the site being fine — read what it does not check, at the bottom.', 'wpaqs' ); ?></p>
 			<?php else : ?>
-				<?php foreach ( $findings as $finding ) : ?>
-					<div class="wpaqs-finding wpaqs-sev-<?php echo esc_attr( $finding['severity'] ); ?>">
-						<div class="wpaqs-finding-head">
-							<span class="wpaqs-badge wpaqs-sev-<?php echo esc_attr( $finding['severity'] ); ?>">
-								<?php echo esc_html( self::severity_label( $finding['severity'] ) ); ?>
-							</span>
-							<strong><?php echo esc_html( $finding['title'] ); ?></strong>
-							<span class="wpaqs-rule"><?php echo esc_html( $finding['rule'] ); ?></span>
-						</div>
-
-						<p><?php echo esc_html( $finding['detail'] ); ?></p>
-
-						<?php if ( '' !== $finding['evidence'] ) : ?>
-							<p class="wpaqs-evidence-label"><?php esc_html_e( 'What was read:', 'wpaqs' ); ?></p>
-							<pre class="wpaqs-evidence"><?php echo esc_html( $finding['evidence'] ); ?></pre>
-						<?php endif; ?>
-
-						<?php if ( '' !== $finding['recommendation'] ) : ?>
-							<p class="wpaqs-recommendation">
-								<strong><?php esc_html_e( 'Next step:', 'wpaqs' ); ?></strong>
-								<?php echo esc_html( $finding['recommendation'] ); ?>
-							</p>
-						<?php endif; ?>
-					</div>
+				<?php foreach ( WPAQS_Findings::group( $findings ) as $group ) : ?>
+					<?php self::render_group( $group ); ?>
 				<?php endforeach; ?>
 			<?php endif; ?>
 		</div>
+		<?php
+	}
+
+	/**
+	 * One card per rule, with every target it found inside it.
+	 *
+	 * The wording every entry shares sits in the header once; each entry keeps its own
+	 * evidence and whatever is left of its own detail. That remainder prints
+	 * **unconditionally** — gating it on the header having shared nothing is how the
+	 * sibling plugin made the modification date vanish from every grouped card the moment
+	 * sharing started working.
+	 *
+	 * @param array $group One group from WPAQS_Findings::group().
+	 * @return void
+	 */
+	private static function render_group( array $group ) {
+		$total    = count( $group['entries'] );
+		$collapse = $total >= WPAQS_Findings::GROUP_COLLAPSE;
+		?>
+		<div class="wpaqs-finding wpaqs-sev-<?php echo esc_attr( $group['severity'] ); ?>">
+			<div class="wpaqs-finding-head">
+				<span class="wpaqs-badge wpaqs-sev-<?php echo esc_attr( $group['severity'] ); ?>">
+					<?php echo esc_html( self::severity_label( $group['severity'] ) ); ?>
+				</span>
+				<strong><?php echo esc_html( $group['title'] ); ?></strong>
+				<?php if ( $total > 1 ) : ?>
+					<span class="wpaqs-count">
+						<?php
+						printf(
+							/* translators: %s: how many accounts or settings the rule found. */
+							esc_html( _n( '%s found', '%s found', $total, 'wpaqs' ) ),
+							esc_html( number_format_i18n( $total ) )
+						);
+						?>
+					</span>
+				<?php endif; ?>
+				<span class="wpaqs-rule"><?php echo esc_html( $group['rule'] ); ?></span>
+			</div>
+
+			<?php if ( '' !== $group['detail'] ) : ?>
+				<p><?php echo esc_html( $group['detail'] ); ?></p>
+			<?php endif; ?>
+
+			<?php if ( $collapse ) : ?>
+				<details class="wpaqs-collapsible">
+					<summary>
+						<?php
+						printf(
+							/* translators: %s: number of entries behind the toggle. */
+							esc_html( _n( 'Show the %s one', 'Show all %s', $total, 'wpaqs' ) ),
+							esc_html( number_format_i18n( $total ) )
+						);
+						?>
+					</summary>
+					<?php self::render_entries( $group ); ?>
+				</details>
+			<?php else : ?>
+				<?php self::render_entries( $group ); ?>
+			<?php endif; ?>
+
+			<?php if ( '' !== $group['recommendation'] ) : ?>
+				<p class="wpaqs-recommendation">
+					<strong><?php esc_html_e( 'Next step:', 'wpaqs' ); ?></strong>
+					<?php echo esc_html( $group['recommendation'] ); ?>
+				</p>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * The targets inside a grouped card.
+	 *
+	 * @param array $group One group from WPAQS_Findings::group().
+	 * @return void
+	 */
+	private static function render_entries( array $group ) {
+		?>
+		<ul class="wpaqs-entries">
+			<?php foreach ( $group['entries'] as $entry ) : ?>
+				<li>
+					<?php if ( '' !== $entry['evidence'] ) : ?>
+						<pre class="wpaqs-evidence"><?php echo esc_html( $entry['evidence'] ); ?></pre>
+					<?php endif; ?>
+
+					<?php // Whatever the header could not share. Printed always, never gated on it. ?>
+					<?php if ( ! empty( $entry['detail'] ) ) : ?>
+						<p class="wpaqs-entry-detail"><?php echo esc_html( $entry['detail'] ); ?></p>
+					<?php endif; ?>
+
+					<?php if ( ! empty( $entry['recommendation'] ) && '' === $group['recommendation'] ) : ?>
+						<p class="wpaqs-recommendation">
+							<strong><?php esc_html_e( 'Next step:', 'wpaqs' ); ?></strong>
+							<?php echo esc_html( $entry['recommendation'] ); ?>
+						</p>
+					<?php endif; ?>
+				</li>
+			<?php endforeach; ?>
+		</ul>
 		<?php
 	}
 

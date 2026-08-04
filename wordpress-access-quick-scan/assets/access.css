@@ -114,3 +114,53 @@
 
 .wpaqs-coverage { margin: 0 }
 .wpaqs-coverage li { margin-bottom: 0.5rem }
+
+/* Count on a grouped card. "5 found" over one card is what an operator needs; five
+   identical cards is how the fifth finding gets missed. */
+.wpaqs-count {
+	font-size: 12px;
+	color: #646970;
+}
+
+.wpaqs-entries {
+	margin: 0.4rem 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.wpaqs-entries > li {
+	margin: 0 0 0.6rem;
+}
+
+.wpaqs-entries > li:last-child { margin-bottom: 0.2rem }
+
+.wpaqs-entry-detail {
+	margin: 0.2rem 0 0;
+	font-size: 12px;
+	color: #50575e;
+}
+
+/* display:flex on a summary loses the browser's own marker, so it is drawn. */
+.wpaqs-collapsible > summary {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	cursor: pointer;
+	margin: 0.3rem 0;
+	font-size: 12px;
+	color: #2271b1;
+}
+
+.wpaqs-collapsible > summary::-webkit-details-marker { display: none }
+
+.wpaqs-collapsible > summary::before {
+	content: "";
+	width: 0;
+	height: 0;
+	border-left: 5px solid currentColor;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	transition: transform 0.1s ease;
+}
+
+.wpaqs-collapsible[open] > summary::before { transform: rotate(90deg) }

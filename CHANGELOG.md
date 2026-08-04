@@ -16,6 +16,14 @@ because a direct grant of `read` is noise on a screen whose value is being short
 That rule is **not deterministic and says so**: legitimate plugins use `add_cap()` for their
 own permissions, so it is a shortlist to confirm rather than an accusation.
 
+**Repeated findings render as one card per rule and severity.** Five application passwords
+used from unfamiliar addresses produced five cards carrying the same title, the same
+paragraph and the same next step, differing only in the evidence line — and scrolling past
+four copies of a paragraph is how the fifth finding gets missed. The wording every entry
+shares sits in the header once; each entry keeps its own evidence and whatever is left of
+its own sentence, cut at a sentence boundary rather than at the last matching character. Six
+or more and the list opens collapsed. The counters still count findings, not cards.
+
 **Live sessions are the only access history WordPress keeps.** `session_tokens` records the
 IP, the user agent, the login time and the expiry of each session still open. A session
 opened by `curl`, a scripting library, or with no user agent at all is reported: a person

@@ -80,6 +80,28 @@ function form_body( $source, $needle ) {
 	return substr( $source, $open, $close - $open );
 }
 
+/**
+ * The source of one method, from its signature to the next docblock.
+ *
+ * Enough to answer where a block of markup lives, which is the question behind a control
+ * installed inside a branch that does not always run.
+ *
+ * @param string $source Template source.
+ * @param string $name   Method name.
+ * @return string
+ */
+function method_body( $source, $name ) {
+	$at = strpos( $source, 'function ' . $name . '(' );
+
+	if ( false === $at ) {
+		return '';
+	}
+
+	$next = strpos( $source, "\n\t/**", $at );
+
+	return false === $next ? substr( $source, $at ) : substr( $source, $at, $next - $at );
+}
+
 $source          = file_get_contents( $page );
 $controller_code = code_only( file_get_contents( $controller ) );
 $page_code       = code_only( $source );
@@ -191,8 +213,38 @@ check(
 // one path that renders it.
 check(
 	'evidence is escaped at render',
-	false !== strpos( $source, 'esc_html( $finding[\'evidence\'] )' ),
+	false !== strpos( $source, "esc_html( \$entry['evidence'] )" ),
 	'user agents are attacker-controlled strings'
+);
+
+// Every echo of an evidence or detail string goes through esc_html. A raw one would put
+// a user agent — somebody else's text — into the page unescaped.
+check(
+	'no evidence or detail is echoed raw',
+	0 === preg_match( '~echo \\$(entry|group|finding)\\[.(evidence|detail|title|recommendation).\\]~', $source ),
+	'escaping happens at render, on the one path that renders'
+);
+
+// Repeated findings are one card. Five identical ones is how the fifth gets missed.
+check(
+	'findings are grouped before rendering',
+	false !== strpos( $source, 'WPAQS_Findings::group(' ),
+	'five cards with one paragraph repeated is the fault this replaced'
+);
+
+check(
+	'a grouped card says how many it holds',
+	false !== strpos( $source, 'wpaqs-count' )
+);
+
+// The entry's own remainder prints unconditionally. Gating it on the header having shared
+// nothing is how the sibling made a date vanish from every grouped card.
+$entries = method_body( $source, 'render_entries' );
+
+check(
+	'the entry detail is not gated on the shared header',
+	'' !== $entries && false === strpos( $entries, "'' === \$group['detail']" ),
+	'the moment sharing works, a gated remainder disappears'
 );
 
 printf( "\n%d failure(s)\n", $GLOBALS['wpaqs_failures'] );

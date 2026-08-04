@@ -119,6 +119,178 @@ class WPAQS_Findings {
 		return isset( $order[ $severity ] ) ? $order[ $severity ] : count( $order );
 	}
 
+	/** A group needs this many entries before its wording is folded into the header. */
+	const GROUP_MIN = 2;
+
+	/** At this many, the entry list opens collapsed behind a summary naming the count. */
+	const GROUP_COLLAPSE = 6;
+
+	/**
+	 * Fold repeated findings into one group per rule and severity.
+	 *
+	 * Five application passwords used from unfamiliar addresses produced five cards with
+	 * the same title, the same paragraph and the same next step, differing only in the
+	 * evidence line. Reading that means scrolling past four copies of a paragraph to learn
+	 * whether anything else was found — which is how the fifth finding gets missed.
+	 *
+	 * Keyed on rule **and** severity, never rule alone. Severity is fixed per rule in the
+	 * catalog today, so the pair is redundant today; it is the key anyway because the
+	 * moment a rule emits two severities, a card holding both would have to lie about one
+	 * of them in its badge.
+	 *
+	 * @param array $findings Findings, already sorted.
+	 * @return array Groups, in the order their first member appeared.
+	 */
+	public static function group( array $findings ) {
+		$groups = array();
+
+		foreach ( $findings as $finding ) {
+			$rule     = isset( $finding['rule'] ) ? (string) $finding['rule'] : '';
+			$severity = isset( $finding['severity'] ) ? (string) $finding['severity'] : 'info';
+			$key      = $rule . '|' . $severity;
+
+			if ( ! isset( $groups[ $key ] ) ) {
+				$groups[ $key ] = array(
+					'severity' => $severity,
+					'rule'     => $rule,
+					'title'    => isset( $finding['title'] ) ? $finding['title'] : '',
+					'entries'  => array(),
+				);
+			}
+
+			$groups[ $key ]['entries'][] = $finding;
+		}
+
+		$list = array();
+
+		foreach ( $groups as $group ) {
+			// Shared only when every member agrees. Today every entry of a rule carries the
+			// same recommendation, and checking rather than assuming is what keeps that true
+			// when one of them starts carrying its own.
+			$group['recommendation'] = self::shared_field( $group['entries'], 'recommendation' );
+			$group['detail']         = '';
+
+			// A group of one renders as a single card, which needs its whole detail:
+			// stripping it there would lose the sentence the card is built on.
+			if ( count( $group['entries'] ) >= self::GROUP_MIN ) {
+				$group['detail'] = self::shared_detail( $group['entries'] );
+
+				if ( '' !== $group['detail'] ) {
+					$shared = strlen( $group['detail'] );
+
+					foreach ( $group['entries'] as $index => $entry ) {
+						$detail = isset( $entry['detail'] ) ? (string) $entry['detail'] : '';
+
+						$group['entries'][ $index ]['detail'] = trim( substr( $detail, $shared ) );
+					}
+				}
+			}
+
+			$list[] = $group;
+		}
+
+		return $list;
+	}
+
+	/**
+	 * The leading sentences every entry in a group states identically.
+	 *
+	 * Grouping the cards is not the same as removing the repetition. `make()` builds a
+	 * detail as the catalog sentence plus an optional extra one, so entries of the same
+	 * rule differ only in their tail — comparing whole strings shares nothing and the
+	 * opened card prints the same paragraph once per entry, which is the thing grouping
+	 * exists to stop.
+	 *
+	 * The prefix is cut at a sentence boundary rather than at the last matching character.
+	 * "Granted directly: edit_" over one entry and "users." over the next would be worse
+	 * than the repetition it replaced. The boundary is ASCII and a UTF-8 continuation byte
+	 * never equals an ASCII one, so cutting there cannot split a multibyte character.
+	 *
+	 * @param array $entries Findings in a group.
+	 * @return string Shared leading text, or '' when there is none worth sharing.
+	 */
+	private static function shared_detail( array $entries ) {
+		$common = null;
+
+		foreach ( $entries as $entry ) {
+			$detail = isset( $entry['detail'] ) ? (string) $entry['detail'] : '';
+
+			if ( '' === $detail ) {
+				return '';
+			}
+
+			if ( null === $common ) {
+				$common = $detail;
+
+				continue;
+			}
+
+			$length = min( strlen( $common ), strlen( $detail ) );
+			$at     = 0;
+
+			while ( $at < $length && $common[ $at ] === $detail[ $at ] ) {
+				$at++;
+			}
+
+			$common = substr( $common, 0, $at );
+
+			if ( '' === $common ) {
+				return '';
+			}
+		}
+
+		if ( null === $common ) {
+			return '';
+		}
+
+		// Every entry says exactly the same thing: share all of it, boundary or not, and
+		// the entries are left with nothing of their own to print.
+		$identical = true;
+
+		foreach ( $entries as $entry ) {
+			if ( ( isset( $entry['detail'] ) ? (string) $entry['detail'] : '' ) !== $common ) {
+				$identical = false;
+			}
+		}
+
+		if ( $identical ) {
+			return $common;
+		}
+
+		$cut = strrpos( $common, '. ' );
+
+		if ( false === $cut ) {
+			return '';
+		}
+
+		return substr( $common, 0, $cut + 1 );
+	}
+
+	/**
+	 * A field's value when every entry agrees on it, or ''.
+	 *
+	 * @param array  $entries Findings in a group.
+	 * @param string $field   Field name.
+	 * @return string
+	 */
+	private static function shared_field( array $entries, $field ) {
+		$first = isset( $entries[0][ $field ] ) ? (string) $entries[0][ $field ] : '';
+
+		if ( '' === $first ) {
+			return '';
+		}
+
+		foreach ( $entries as $entry ) {
+			$value = isset( $entry[ $field ] ) ? (string) $entry[ $field ] : '';
+
+			if ( $value !== $first ) {
+				return '';
+			}
+		}
+
+		return $first;
+	}
+
 	/**
 	 * Findings ordered worst first, then by target so the list is stable.
 	 *

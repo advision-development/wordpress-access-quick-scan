@@ -148,6 +148,25 @@ WordPress at all. Login history does not exist beyond sessions still open. No op
 held about any IP address, because the plugin makes no network requests. All four are
 stated on the screen, and `test-markup.php` asserts they are rendered.
 
+**Repeated findings are one card, keyed on rule *and* severity.** Five application
+passwords used from unfamiliar addresses produced five cards with the same title, the same
+paragraph and the same next step — which is how the fifth gets missed. Severity is fixed per
+rule in the catalog today, so the pair is redundant today; it is the key anyway because a
+card holding two severities would have to lie about one of them in its badge.
+
+**Grouping the cards is not the same as removing the repetition.** The sibling's first
+version compared whole `detail` strings, and `make()` builds a detail as the catalog
+sentence plus an optional extra one — so entries differing only in their tail shared nothing
+and the opened card printed the same paragraph once per entry. `shared_detail()` takes the
+leading sentences every entry states identically and cuts **at a sentence boundary**:
+"Granted directly: edit_" over one entry and "users." over the next is worse than the
+repetition. `test-group.php` pins both, and its mutation runs confirm that comparing whole
+strings fails three assertions.
+
+**A shared header means the entry prints its remainder unconditionally.** Gating it on the
+header having shared nothing is how the sibling made a modification date vanish from every
+grouped card the moment sharing started working.
+
 **Sibling forms, never nested.** HTML terminates an outer form at an inner one. Both
 controls sit in one table cell and each is its own form; `test-markup.php` counts the
 `<form` tags inside each.
@@ -173,7 +192,8 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-app-passwords.php` | Unused, foreign address, no recorded address, and a password used from a live session's own IP |
 | `test-registration.php` | The combination fires; each half alone does not; `'0'` is not truthy |
 | `test-actions.php` | The self refusal, the multisite capability, nonce scoping, live existence, and that nothing calls a user delete |
-| `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap |
+| `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |
+| `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap, grouped rendering, and that no evidence is echoed raw |
 
 When adding a rule, add both a positive case and the benign case that must **not** match. A
 rule without a false-positive test is not finished.
