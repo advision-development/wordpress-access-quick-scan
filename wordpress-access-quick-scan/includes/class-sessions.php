@@ -65,11 +65,12 @@ class WPAQS_Sessions {
 
 		$sessions = array();
 
-		foreach ( $stored as $session ) {
+		foreach ( $stored as $verifier => $session ) {
 			if ( ! is_array( $session ) ) {
 				// Meta written by something other than WordPress. Reported as unreadable
 				// rather than skipped: an unreadable session is still a session.
 				$sessions[] = array(
+					'verifier'   => (string) $verifier,
 					'ip'         => '',
 					'ua'         => '',
 					'login'      => 0,
@@ -82,6 +83,10 @@ class WPAQS_Sessions {
 
 			$sessions[] = array
 				(
+					// The meta key. WordPress stores sessions keyed by a hash of the token it
+					// gave the browser, so this identifies one session without being the secret
+					// that authenticates it.
+					'verifier'   => (string) $verifier,
 					'ip'         => isset( $session['ip'] ) ? (string) $session['ip'] : '',
 					'ua'         => isset( $session['ua'] ) ? (string) $session['ua'] : '',
 					'login'      => isset( $session['login'] ) ? (int) $session['login'] : 0,
@@ -134,6 +139,63 @@ class WPAQS_Sessions {
 		}
 
 		return array_keys( $addresses );
+	}
+
+	/**
+	 * Whether one session can be ended on this site.
+	 *
+	 * `WP_Session_Tokens::destroy()` takes the raw token WordPress handed the browser, and
+	 * what is stored — and therefore all this plugin can see — is a hash of it. There is no
+	 * public way to end a session you can only identify by its hash, so ending one means
+	 * writing the `session_tokens` meta the way core does internally.
+	 *
+	 * That is only correct while the default manager is in use. A site that replaces it
+	 * through the `session_token_manager` filter keeps its sessions somewhere else entirely,
+	 * and writing user meta there would appear to work and change nothing. So the control is
+	 * offered only when the default manager is the one running.
+	 *
+	 * @return bool
+	 */
+	public static function can_end_one() {
+		if ( ! function_exists( 'apply_filters' ) ) {
+			return false;
+		}
+
+		return 'WP_User_Meta_Session_Tokens' === apply_filters( 'session_token_manager', 'WP_User_Meta_Session_Tokens' );
+	}
+
+	/**
+	 * End one session, leaving the others alone.
+	 *
+	 * @param int    $user_id  User id.
+	 * @param string $verifier The stored key identifying the session.
+	 * @return array array( error )
+	 */
+	public static function end_one( $user_id, $verifier ) {
+		$user_id  = (int) $user_id;
+		$verifier = (string) $verifier;
+
+		if ( ! self::can_end_one() ) {
+			return array( 'error' => __( 'This site stores sessions somewhere other than the usual place, so a single one cannot be ended from here. Ending all of the account\'s sessions still works.', 'wpaqs' ) );
+		}
+
+		$stored = get_user_meta( $user_id, 'session_tokens', true );
+
+		if ( ! is_array( $stored ) || ! isset( $stored[ $verifier ] ) ) {
+			// Checked live rather than trusted from the request: a session that has expired or
+			// been ended since the screen was drawn is not something to act on.
+			return array( 'error' => __( 'That session is not open any more, so nothing was ended. Reload the screen to see the current list.', 'wpaqs' ) );
+		}
+
+		unset( $stored[ $verifier ] );
+
+		if ( empty( $stored ) ) {
+			delete_user_meta( $user_id, 'session_tokens' );
+		} else {
+			update_user_meta( $user_id, 'session_tokens', $stored );
+		}
+
+		return array( 'error' => '' );
 	}
 
 	/**

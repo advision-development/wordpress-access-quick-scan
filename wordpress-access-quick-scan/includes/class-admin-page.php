@@ -156,6 +156,37 @@ class WPAQS_Admin_Page {
 			<div class="notice notice-success inline">
 				<p><?php esc_html_e( 'Application password revoked. Anything holding it can no longer authenticate. Existing browser sessions are unaffected.', 'wpaqs' ); ?></p>
 			</div>
+		<?php elseif ( 'session-ended' === $notice ) : ?>
+			<div class="notice notice-success inline">
+				<p><?php esc_html_e( 'That one session is closed. Every other session on the account is still open, and application passwords are unaffected.', 'wpaqs' ); ?></p>
+			</div>
+		<?php elseif ( 'capability-removed' === $notice ) : ?>
+			<div class="notice notice-success inline">
+				<p>
+					<?php
+					// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display only.
+					$cap = isset( $_GET['wpaqs-cap'] ) ? sanitize_key( wp_unslash( $_GET['wpaqs-cap'] ) ) : '';
+
+					printf(
+						/* translators: %s: capability name. */
+						esc_html__( 'Removed %s from that account. Its role is untouched, so anything the role grants it still has. Granting the capability again puts this back.', 'wpaqs' ),
+						esc_html( '' === $cap ? __( 'the capability', 'wpaqs' ) : $cap )
+					);
+					?>
+				</p>
+			</div>
+		<?php elseif ( 'default-role-parked' === $notice ) : ?>
+			<div class="notice notice-success inline">
+				<p><?php esc_html_e( 'New accounts will be Subscribers. Accounts that already exist keep the role they have — this changed what the next one gets, not who can do what today. Settings then General puts it back.', 'wpaqs' ); ?></p>
+			</div>
+		<?php elseif ( 'registration-closed' === $notice ) : ?>
+			<div class="notice notice-success inline">
+				<p><?php esc_html_e( 'Registration is closed. Nobody can create an account until it is opened again under Settings then General, and accounts that already exist are unaffected.', 'wpaqs' ); ?></p>
+			</div>
+		<?php elseif ( 'capability-refused' === $notice || 'registration-refused' === $notice ) : ?>
+			<div class="notice notice-error inline">
+				<p><?php echo esc_html( '' === $why ? __( 'Nothing was changed.', 'wpaqs' ) : $why ); ?></p>
+			</div>
 		<?php elseif ( 'sessions-refused' === $notice || 'revoke-refused' === $notice ) : ?>
 			<div class="notice notice-error inline">
 				<p><?php echo esc_html( '' === $why ? __( 'Nothing was changed.', 'wpaqs' ) : $why ); ?></p>
@@ -395,6 +426,20 @@ class WPAQS_Admin_Page {
 													—
 													<?php echo esc_html( '' === $session['ua'] ? __( 'no user agent sent', 'wpaqs' ) : $session['ua'] ); ?>
 												</span>
+
+												<?php // One session, so an administrator can close a scripted one without
+													// signing themselves out. Its own form, a sibling of the others. ?>
+												<?php if ( WPAQS_Sessions::can_end_one() && '' !== $session['verifier'] ) : ?>
+													<br />
+													<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+														onsubmit="return confirm( '<?php echo esc_js( __( 'End this one session? Every other session on the account stays open, including your own if this is your account. Whoever held it has to sign in again.', 'wpaqs' ) ); ?>' );">
+														<input type="hidden" name="action" value="wpaqs_end_session" />
+														<input type="hidden" name="user_id" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
+														<input type="hidden" name="verifier" value="<?php echo esc_attr( $session['verifier'] ); ?>" />
+														<?php wp_nonce_field( WPAQS_NONCE . '-end-session-' . $row['id'] . '-' . $session['verifier'] ); ?>
+														<button type="submit" class="button button-small"><?php esc_html_e( 'End this session', 'wpaqs' ); ?></button>
+													</form>
+												<?php endif; ?>
 											</li>
 										<?php endforeach; ?>
 									</ul>
@@ -417,6 +462,122 @@ class WPAQS_Admin_Page {
 				</tbody>
 			</table>
 		</details>
+		<?php
+	}
+
+	/**
+	 * The control that clears one finding, when there is one.
+	 *
+	 * A finding with no way to resolve it is noise however true it is, so every rule that can
+	 * be cleared from here carries its own button. The ones that cannot say what to do
+	 * instead, in the recommendation, and carry nothing.
+	 *
+	 * @param array $finding One finding.
+	 * @return void
+	 */
+	private static function render_finding_action( array $finding ) {
+		if ( 'open_registration_privileged_role' === $finding['rule'] ) {
+			self::render_registration_actions();
+
+			return;
+		}
+
+		if ( 'capability_outside_role' === $finding['rule'] ) {
+			self::render_capability_actions( $finding );
+		}
+	}
+
+	/**
+	 * Two ways to close open registration handing out a privileged role.
+	 *
+	 * Both are settings rather than deletions: Settings then General puts either back, and no
+	 * account already created is touched. On a network, registration is not a per-site setting
+	 * at all, so the screen says where it lives instead of offering a button that would change
+	 * nothing.
+	 *
+	 * @return void
+	 */
+	private static function render_registration_actions() {
+		$state = WPAQS_Registration::state();
+		?>
+		<p class="wpaqs-actions">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+				onsubmit="return confirm( '<?php echo esc_js( __( 'Set the role new accounts receive to Subscriber? Accounts that already exist keep the role they have — this only changes what the next one gets. Settings then General puts it back.', 'wpaqs' ) ); ?>' );">
+				<input type="hidden" name="action" value="wpaqs_park_default_role" />
+				<?php wp_nonce_field( WPAQS_NONCE . '-park-default-role' ); ?>
+				<button type="submit" class="button button-small"><?php esc_html_e( 'Make new accounts Subscribers', 'wpaqs' ); ?></button>
+			</form>
+
+			<?php if ( $state['network'] ) : ?>
+				<span class="description">
+					<?php esc_html_e( 'Registration itself is a network setting here, so it is changed under Network Admin then Settings rather than from this screen.', 'wpaqs' ); ?>
+				</span>
+			<?php else : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+					onsubmit="return confirm( '<?php echo esc_js( __( 'Close registration to the public? Nobody can create an account until you open it again under Settings then General. Accounts that already exist are unaffected. If this site sells memberships, closing it stops new customers signing up — change the default role instead.', 'wpaqs' ) ); ?>' );">
+					<input type="hidden" name="action" value="wpaqs_close_registration" />
+					<?php wp_nonce_field( WPAQS_NONCE . '-close-registration' ); ?>
+					<button type="submit" class="button button-small"><?php esc_html_e( 'Close registration', 'wpaqs' ); ?></button>
+				</form>
+			<?php endif; ?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * A button per capability granted straight to an account.
+	 *
+	 * One button per capability rather than one for all of them: the finding asks the operator
+	 * to confirm each grant, and confirming often ends in keeping some and removing others.
+	 *
+	 * @param array $finding One capability_outside_role finding.
+	 * @return void
+	 */
+	private static function render_capability_actions( array $finding ) {
+		if ( ! preg_match( '~^user:(\d+)$~', (string) $finding['target'], $matched ) ) {
+			return;
+		}
+
+		$user_id = (int) $matched[1];
+
+		if ( ! WPAQS_Controller::user_can_act() || get_current_user_id() === $user_id ) {
+			return;
+		}
+
+		// The capabilities are in the evidence because that is where the reader put them, and
+		// re-reading them live keeps the buttons honest if one was removed since.
+		$user = get_userdata( $user_id );
+
+		if ( ! $user ) {
+			return;
+		}
+
+		$direct = WPAQS_Accounts::notable( WPAQS_Accounts::direct_capabilities( $user, WPAQS_Accounts::registered_roles() ) );
+
+		if ( empty( $direct ) ) {
+			return;
+		}
+		?>
+		<p class="wpaqs-actions">
+			<?php foreach ( $direct as $cap ) : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+					onsubmit="return confirm( '<?php echo esc_js( __( 'Take this capability off the account? Its role is not touched, so anything the role grants it keeps. Granting the capability again puts this back. Confirm first that no plugin depends on it.', 'wpaqs' ) ); ?>' );">
+					<input type="hidden" name="action" value="wpaqs_remove_capability" />
+					<input type="hidden" name="user_id" value="<?php echo esc_attr( (string) $user_id ); ?>" />
+					<input type="hidden" name="cap" value="<?php echo esc_attr( $cap ); ?>" />
+					<?php wp_nonce_field( WPAQS_NONCE . '-remove-cap-' . $user_id . '-' . $cap ); ?>
+					<button type="submit" class="button button-small">
+						<?php
+						printf(
+							/* translators: %s: capability name. */
+							esc_html__( 'Remove %s', 'wpaqs' ),
+							esc_html( $cap )
+						);
+						?>
+					</button>
+				</form>
+			<?php endforeach; ?>
+		</p>
 		<?php
 	}
 

@@ -125,7 +125,7 @@ check( 'every form is closed', $opens === $closes, $opens . ' opened, ' . $close
 
 // Both controls sit in the same table row. Nested, the browser terminates the outer one at
 // the inner — the fault that once left the sibling's bulk trash action receiving one post.
-foreach ( array( 'wpaqs_end_sessions', 'wpaqs_revoke_password' ) as $action ) {
+foreach ( array( 'wpaqs_end_sessions', 'wpaqs_revoke_password', 'wpaqs_end_session', 'wpaqs_remove_capability', 'wpaqs_park_default_role', 'wpaqs_close_registration' ) as $action ) {
 	$body = form_body( $source, $action );
 
 	check( 'the ' . $action . ' form exists', '' !== $body );
@@ -153,6 +153,51 @@ foreach ( array( 'wpaqs_end_sessions', 'wpaqs_revoke_password' ) as $action ) {
 		'the form would post into nothing'
 	);
 }
+
+// Every finding that can be cleared from here carries its control. A rule with no way to
+// resolve it is noise however true it is, and the two that cannot be cleared say what to do
+// instead rather than carrying a button.
+check(
+	'the registration finding carries its fix',
+	false !== strpos( $source, "'open_registration_privileged_role' === \$finding['rule']" ),
+	'the only critical rule had no button at all'
+);
+
+check(
+	'the capability finding carries its fix',
+	false !== strpos( $source, "'capability_outside_role' === \$finding['rule']" )
+);
+
+// Each confirmation names what survives it, because the mistake an operator makes is
+// assuming one action covers more than it does.
+check(
+	'parking the default role says existing accounts keep their role',
+	false !== strpos( form_body( $source, 'wpaqs_park_default_role' ), 'keep the role they have' )
+);
+
+check(
+	'closing registration warns a membership site',
+	false !== strpos( form_body( $source, 'wpaqs_close_registration' ), 'sells memberships' ),
+	'closing registration on a site that sells memberships breaks signup'
+);
+
+check(
+	'removing a capability says the role is untouched',
+	false !== strpos( form_body( $source, 'wpaqs_remove_capability' ), 'role is not touched' )
+);
+
+check(
+	'ending one session says the others stay open',
+	false !== strpos( form_body( $source, 'wpaqs_end_session' ), 'stays open' )
+);
+
+// A single session can only be ended where WordPress keeps sessions in user meta. Offering
+// the button on a site with a custom manager would appear to work and change nothing.
+check(
+	'the single-session control is gated on the storage being the usual one',
+	false !== strpos( $source, 'WPAQS_Sessions::can_end_one()' ),
+	'a custom session manager keeps them somewhere this cannot write'
+);
 
 // One is reversible and one is not, and each confirmation has to say which.
 check(

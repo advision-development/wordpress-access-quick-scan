@@ -3,6 +3,35 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.3.0
+
+**Every rule that can be cleared from this screen now has the control that clears it.** The
+question asked of each one was what resolves it, and three answers were missing.
+
+**Open registration handing out a privileged role** — the only critical rule — had no button
+at all. Two now: make new accounts Subscribers, or close registration. Both are settings
+rather than deletions, Settings then General puts either back, and no account already created
+is touched. The confirmations say which is which, and closing registration warns that it stops
+signup on a site that sells memberships.
+
+**A capability granted straight to an account** can be taken off, one button per capability
+because confirming a list of grants often ends in keeping some. The role is not touched:
+removing something a role grants would be undone the moment WordPress read the role again, so
+that request is refused and the wording says where the grant actually comes from.
+
+**One session** can be ended rather than all of them, so an administrator with a browser
+session and one opened by a script does not have to sign themselves out to close the script's.
+`WP_Session_Tokens::destroy()` wants the raw token and only its hash is stored, so this writes
+the session meta the way core does — and is therefore offered **only** when the default session
+manager is in use. A site that replaces it keeps sessions elsewhere, where the write would
+appear to work and change nothing.
+
+**And a correctness fix found while building the first of those.** On multisite, WordPress does
+not consult `users_can_register` at all — the network option `registration` decides — so the
+rule was reading a setting nothing honours and would report a closed network as open, or the
+reverse. It reads the right one now, and refuses to close registration from a per-site screen
+because that setting governs every site.
+
 ## 0.2.2
 
 **`content_predates_account` is gone**, two versions after it arrived. Demoting and rewording

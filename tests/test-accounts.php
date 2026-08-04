@@ -44,6 +44,18 @@ function get_role( $name ) {
 	return isset( $roles[ $name ] ) ? (object) array( 'capabilities' => $roles[ $name ] ) : null;
 }
 
+function get_userdata( $id ) {
+	return isset( $GLOBALS['users'][ (int) $id ] ) ? $GLOBALS['users'][ (int) $id ] : false;
+}
+
+function get_current_user_id() {
+	return (int) $GLOBALS['acting'];
+}
+
+function current_user_can( $cap, $object_id = null ) {
+	return ! empty( $GLOBALS['acting_caps'][ $cap ] );
+}
+
 function count_users() {
 	return array( 'total_users' => count( $GLOBALS['users'] ) );
 }
@@ -71,14 +83,33 @@ load_class( 'accounts' );
  * @return object
  */
 function user( $id, $login, array $roles, array $caps, $registered = '2020-01-01 00:00:00' ) {
-	return (object) array(
-		'ID'              => $id,
-		'user_login'      => $login,
-		'user_email'      => $login . '@example.test',
-		'user_registered' => $registered,
-		'roles'           => $roles,
-		'caps'            => $caps,
-	);
+	return new Stub_User( $id, $login, $roles, $caps, $registered );
+}
+
+/**
+ * A stand-in for WP_User with the surface the reader and the action touch.
+ */
+class Stub_User {
+
+	public $ID;
+	public $user_login;
+	public $user_email;
+	public $user_registered;
+	public $roles;
+	public $caps;
+
+	public function __construct( $id, $login, array $roles, array $caps, $registered ) {
+		$this->ID              = $id;
+		$this->user_login      = $login;
+		$this->user_email      = $login . '@example.test';
+		$this->user_registered = $registered;
+		$this->roles           = $roles;
+		$this->caps            = $caps;
+	}
+
+	public function remove_cap( $cap ) {
+		unset( $this->caps[ $cap ] );
+	}
 }
 
 $recent = gmdate( 'Y-m-d H:i:s', time() - ( 3 * DAY_IN_SECONDS ) );
@@ -249,5 +280,72 @@ check(
 );
 
 unset( $GLOBALS['users'][45], $GLOBALS['users'][47], $GLOBALS['users'][41] );
+
+// ------------------------------------------------- removing a direct capability
+
+$GLOBALS['acting']      = 1;
+$GLOBALS['acting_caps'] = array( 'manage_options' => true, 'edit_user' => true );
+
+// The subscriber that can edit users: the finding asks the operator to confirm the grant, and
+// this is what confirming sometimes ends in.
+$removed = WPAQS_Accounts::remove_direct_capability( 7, 'edit_users' );
+
+check( 'a directly granted capability can be taken off', '' === $removed['error'], $removed['error'] );
+check( 'and it is gone from the account', ! isset( $GLOBALS['users'][7]->caps['edit_users'] ) );
+check( 'while the role stays', isset( $GLOBALS['users'][7]->caps['subscriber'] ), 'removing the role was never this button\'s job' );
+
+check(
+	'which clears the finding',
+	! isset( array_flip( array_map( function ( $f ) { return $f['rule'] . '|' . $f['target']; }, WPAQS_Accounts::findings( WPAQS_Accounts::all() ) ) )['capability_outside_role|user:7'] ),
+	'a finding with no resolution is noise'
+);
+
+// Live, not from a report: a capability already removed is not something to act on.
+check( 'removing it twice is refused', '' !== WPAQS_Accounts::remove_direct_capability( 7, 'edit_users' )['error'] );
+
+// A capability that comes from the role was never this button's to take: removing it from the
+// account changes nothing, because WordPress reads it from the role again.
+// Account 17 rather than account 1: acting as 1, asking about 1 hits the self refusal and
+// answers a different question — which is what the first version of this assertion did.
+check(
+	'a capability that comes from the role is refused',
+	'' !== WPAQS_Accounts::remove_direct_capability( 17, 'install_plugins' )['error'],
+	'it would appear to work and change nothing'
+);
+
+check(
+	'and the refusal says where the grant comes from',
+	false !== stripos( WPAQS_Accounts::remove_direct_capability( 17, 'install_plugins' )['error'], 'comes from its role' )
+);
+
+// Your own account: stripping your own manage_options locks you out of the screen.
+$GLOBALS['acting'] = 13;
+$GLOBALS['users'][13]->caps['edit_users'] = true;
+
+check(
+	'your own account is refused',
+	'' !== WPAQS_Accounts::remove_direct_capability( 13, 'edit_users' )['error'],
+	'you can remove your own access to this screen'
+);
+
+check( 'and the capability is still there', isset( $GLOBALS['users'][13]->caps['edit_users'] ) );
+
+$GLOBALS['acting'] = 1;
+
+check( 'an account that does not exist is refused', '' !== WPAQS_Accounts::remove_direct_capability( 404, 'edit_users' )['error'] );
+
+// Only capabilities the screen reports get buttons, so a request for anything else did not
+// come from one.
+$GLOBALS['users'][13]->caps['read_private_pages'] = true;
+
+check(
+	'a capability the screen never offers is refused',
+	'' !== WPAQS_Accounts::remove_direct_capability( 13, 'read_private_pages' )['error'],
+	'the screen only reports notable ones, so only those have buttons'
+);
+
+$GLOBALS['acting_caps'] = array( 'manage_options' => true );
+
+check( 'an account you cannot edit is refused', '' !== WPAQS_Accounts::remove_direct_capability( 13, 'edit_users' )['error'] );
 
 finish();

@@ -1,15 +1,19 @@
 <?php
 /**
- * The two actions, and the guards on them.
+ * The actions, and the guards on them.
  *
- * Both are pressed by a person and both act on something confirmed to exist at the moment
- * of pressing. There is no stored report to check a target against, and that is the
- * stronger arrangement rather than a shortcut: a report is a snapshot, and the sibling
- * plugin shipped a button that offered to unschedule an event already gone because the row
- * it rendered from was stale.
+ * Every one is pressed by a person and acts on something confirmed to exist at the moment of
+ * pressing. There is no stored report to check a target against, and that is the stronger
+ * arrangement rather than a shortcut: a report is a snapshot, and the sibling plugin shipped
+ * a button that offered to unschedule an event already gone because the row it rendered from
+ * was stale.
  *
- * Neither action deletes an account or anything it created. `wp_delete_user()` reassigns
- * or destroys the account's posts, and those posts are the record of what it did.
+ * Each one exists because a finding needs it. A finding nobody can resolve is noise however
+ * true it is, so the question asked before adding a rule here is what clears it — and the
+ * answer is one of these or an instruction the operator can follow.
+ *
+ * **Nothing here deletes an account or anything it created.** `wp_delete_user()` reassigns or
+ * destroys the account's posts, and those posts are the record of what it did.
  *
  * @package WPAQS
  */
@@ -31,6 +35,112 @@ class WPAQS_Controller {
 	public static function register() {
 		add_action( 'admin_post_wpaqs_end_sessions', array( __CLASS__, 'end_sessions' ) );
 		add_action( 'admin_post_wpaqs_revoke_password', array( __CLASS__, 'revoke_password' ) );
+		add_action( 'admin_post_wpaqs_end_session', array( __CLASS__, 'end_session' ) );
+		add_action( 'admin_post_wpaqs_remove_capability', array( __CLASS__, 'remove_capability' ) );
+		add_action( 'admin_post_wpaqs_park_default_role', array( __CLASS__, 'park_default_role' ) );
+		add_action( 'admin_post_wpaqs_close_registration', array( __CLASS__, 'close_registration' ) );
+	}
+
+	/**
+	 * End one session and leave the rest of the account's alone.
+	 *
+	 * @return void
+	 */
+	public static function end_session() {
+		if ( ! self::user_can_act() ) {
+			wp_die( esc_html__( 'You do not have permission to do that.', 'wpaqs' ), '', array( 'response' => 403 ) );
+		}
+
+		$user_id  = isset( $_POST['user_id'] ) ? absint( $_POST['user_id'] ) : 0;
+		$verifier = isset( $_POST['verifier'] ) ? sanitize_text_field( wp_unslash( $_POST['verifier'] ) ) : '';
+
+		check_admin_referer( WPAQS_NONCE . '-end-session-' . $user_id . '-' . $verifier );
+
+		// The self refusal does not apply here the way it does to ending every session: an
+		// administrator with one browser session and one opened by a script should be able to
+		// close the script's without signing themselves out. What protects them is that the
+		// session is named rather than the account.
+		if ( ! get_userdata( $user_id ) ) {
+			self::redirect( 'sessions-refused', self::refusal_text( 'missing' ) );
+		}
+
+		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+			self::redirect( 'sessions-refused', self::refusal_text( 'nocap' ) );
+		}
+
+		$result = WPAQS_Sessions::end_one( $user_id, $verifier );
+
+		if ( '' === $result['error'] ) {
+			self::redirect( 'session-ended' );
+		}
+
+		self::redirect( 'sessions-refused', $result['error'] );
+	}
+
+	/**
+	 * Take a directly-granted capability off an account.
+	 *
+	 * @return void
+	 */
+	public static function remove_capability() {
+		if ( ! self::user_can_act() ) {
+			wp_die( esc_html__( 'You do not have permission to do that.', 'wpaqs' ), '', array( 'response' => 403 ) );
+		}
+
+		$user_id = isset( $_POST['user_id'] ) ? absint( $_POST['user_id'] ) : 0;
+		$cap     = isset( $_POST['cap'] ) ? sanitize_key( wp_unslash( $_POST['cap'] ) ) : '';
+
+		check_admin_referer( WPAQS_NONCE . '-remove-cap-' . $user_id . '-' . $cap );
+
+		$result = WPAQS_Accounts::remove_direct_capability( $user_id, $cap );
+
+		if ( '' === $result['error'] ) {
+			self::redirect( 'capability-removed', '', array( 'wpaqs-cap' => $cap ) );
+		}
+
+		self::redirect( 'capability-refused', $result['error'] );
+	}
+
+	/**
+	 * Set the role new accounts receive to the one that can only read.
+	 *
+	 * @return void
+	 */
+	public static function park_default_role() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do that.', 'wpaqs' ), '', array( 'response' => 403 ) );
+		}
+
+		check_admin_referer( WPAQS_NONCE . '-park-default-role' );
+
+		$result = WPAQS_Registration::park_default_role();
+
+		if ( '' === $result['error'] ) {
+			self::redirect( 'default-role-parked' );
+		}
+
+		self::redirect( 'registration-refused', $result['error'] );
+	}
+
+	/**
+	 * Close public registration on this site.
+	 *
+	 * @return void
+	 */
+	public static function close_registration() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do that.', 'wpaqs' ), '', array( 'response' => 403 ) );
+		}
+
+		check_admin_referer( WPAQS_NONCE . '-close-registration' );
+
+		$result = WPAQS_Registration::close();
+
+		if ( '' === $result['error'] ) {
+			self::redirect( 'registration-closed' );
+		}
+
+		self::redirect( 'registration-refused', $result['error'] );
 	}
 
 	/**

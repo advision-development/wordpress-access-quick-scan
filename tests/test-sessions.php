@@ -7,6 +7,22 @@
  * matcher would catch — stay silent.
  */
 
+function update_user_meta( $user_id, $key, $value ) {
+	$GLOBALS['tokens'][ (int) $user_id ] = $value;
+
+	return true;
+}
+
+function delete_user_meta( $user_id, $key ) {
+	unset( $GLOBALS['tokens'][ (int) $user_id ] );
+
+	return true;
+}
+
+function apply_filters( $hook, $value ) {
+	return isset( $GLOBALS['filtered'][ $hook ] ) ? $GLOBALS['filtered'][ $hook ] : $value;
+}
+
 function get_user_meta( $user_id, $key, $single = false ) {
 	if ( 'session_tokens' !== $key ) {
 		return $single ? '' : array();
@@ -175,5 +191,63 @@ check(
 $blank = WPAQS_Sessions::findings( $account, sessions_from( array( '', '', '' ) ) );
 
 check( 'sessions with no addresses report no networks', array() === $blank );
+
+// ------------------------------------------------- ending one session
+
+// The verifier is the meta key. WordPress stores sessions keyed by a hash of the token it
+// gave the browser, so it names one session without being the secret that authenticates it —
+// which is also why destroy() cannot be used: it wants the raw token, and this only has the
+// hash.
+$GLOBALS['tokens'] = array(
+	1 => array(
+		'hash-a' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 Chrome/126.0', 'login' => 1750000000, 'expiration' => 1760000000 ),
+		'hash-b' => array( 'ip' => '198.51.100.4', 'ua' => 'curl/8.4.0', 'login' => 1750000100, 'expiration' => 1760000100 ),
+	),
+	4 => array(
+		'only-one' => array( 'ip' => '203.0.113.9', 'ua' => 'Mozilla/5.0 Chrome/126.0', 'login' => 1750000000, 'expiration' => 1760000000 ),
+	),
+);
+
+$read = WPAQS_Sessions::for_user( 1 );
+
+check( 'the verifier is kept so a session can be named', 'hash-a' === $read[0]['verifier'], $read[0]['verifier'] );
+
+check( 'ending one is available with the usual storage', WPAQS_Sessions::can_end_one() );
+
+$ended = WPAQS_Sessions::end_one( 1, 'hash-b' );
+
+check( 'the named session is ended', '' === $ended['error'], $ended['error'] );
+check( 'and it is gone from the meta', ! isset( $GLOBALS['tokens'][1]['hash-b'] ) );
+check( 'while the other one stays open', isset( $GLOBALS['tokens'][1]['hash-a'] ), 'ending one must not end them all' );
+
+// Checked live: a session already gone is not something to act on, and saying so beats
+// reporting success for a write that changed nothing.
+$again = WPAQS_Sessions::end_one( 1, 'hash-b' );
+
+check( 'ending it twice is refused', '' !== $again['error'], $again['error'] );
+check( 'a verifier nobody has is refused', '' !== WPAQS_Sessions::end_one( 1, 'invented' )['error'] );
+check( 'an empty verifier is refused', '' !== WPAQS_Sessions::end_one( 1, '' )['error'] );
+check( 'an account with no sessions is refused', '' !== WPAQS_Sessions::end_one( 99, 'hash-a' )['error'] );
+
+// The last session leaves the meta deleted rather than an empty array, which is what core
+// does and what stops a stale empty row lingering.
+$last = WPAQS_Sessions::end_one( 4, 'only-one' );
+
+check( 'ending the last session succeeds', '' === $last['error'], $last['error'] );
+check( 'and removes the meta rather than leaving it empty', ! isset( $GLOBALS['tokens'][4] ) );
+
+// A site that replaces the session manager keeps sessions somewhere this cannot write, so
+// writing user meta there would appear to work and change nothing.
+$GLOBALS['filtered'] = array( 'session_token_manager' => 'Custom_Session_Tokens' );
+
+check( 'a custom session manager disables the control', ! WPAQS_Sessions::can_end_one() );
+check(
+	'and refuses the action rather than writing anyway',
+	'' !== WPAQS_Sessions::end_one( 1, 'hash-a' )['error'],
+	'a write that changes nothing is worse than a refusal'
+);
+check( 'and the other session is untouched', isset( $GLOBALS['tokens'][1]['hash-a'] ) );
+
+$GLOBALS['filtered'] = array();
 
 finish();

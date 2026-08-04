@@ -59,14 +59,30 @@ accounts class`. The body carries the *why*.
 transient, no scheduled event — which is why `uninstall.php` removes nothing and says so.
 The moment anything is stored, its name belongs in that file.
 
-**Two deliberate exceptions**, both pressed by a person:
+**Six deliberate exceptions**, every one pressed by a person, and every one there because a
+rule needs it. **Before adding a rule, ask what clears it** — a true finding with no resolution
+costs more attention than it returns, and that is what removed `content_predates_account`:
 
 - **End an account's sessions.** Reversible by definition: the person signs in again.
   **Refuses the current user**, because ending your own sessions signs you out of the
   screen you are working from, mid-incident.
+- **End one session**, leaving the rest open, so an administrator can close a scripted session
+  without signing themselves out. `WP_Session_Tokens::destroy()` takes the raw token and only
+  its hash is stored, so this writes the session meta the way core does — and is offered
+  **only** when the default manager is in use. A site that replaces it through
+  `session_token_manager` keeps sessions elsewhere, where the write would appear to work and
+  change nothing.
 - **Revoke an application password.** Not reversible — the secret is deleted. It ships
   because revoking is what actually stops REST authentication, and a mistake costs a broken
   integration rather than lost data. The confirmation says so before the press.
+- **Take a directly granted capability off an account.** The role is untouched on purpose:
+  removing what a role grants would be undone the moment WordPress read the role again, so that
+  request is refused and the wording says where the grant comes from. Refuses your own account
+  — you can strip your own `manage_options`.
+- **Make new accounts Subscribers**, and **close registration**. Settings rather than
+  deletions. On multisite, registration is a **network** option: `users_can_register` is not
+  consulted there at all, so the rule reads `registration` from the site options and the close
+  button is refused with a pointer at Network Settings.
 
 **No delete, of an account or of anything it created.** `wp_delete_user()` reassigns or
 destroys the account's posts, and those posts are the record of what it did. The sibling

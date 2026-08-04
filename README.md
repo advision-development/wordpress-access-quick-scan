@@ -60,7 +60,7 @@ Stated on the screen too, because "nothing found" is not the same as "nothing th
   plugin makes no network requests and holds no opinion about any of them.
 - **Files, core, and hardening settings.** A different question and a different plugin.
 
-## The two actions
+## The actions
 
 Both have to be pressed by a person, and both act on something confirmed to exist at that
 moment.
@@ -70,8 +70,19 @@ in again with the same password, so change the password too if that is the conce
 Application passwords keep working. **Refused on your own account:** it would sign you out
 of the screen you are working from.
 
+**End one session.** Leaves every other session open, including your own. For an
+administrator with a browser session and one opened by a script.
+
 **Revoke an application password.** Not reversible; the secret is deleted. Anything using it
 stops working until somebody issues a new one. Browser sessions are unaffected.
+
+**Take a directly granted capability off an account.** The role is untouched — removing what a
+role grants would be undone the moment WordPress read the role again. Reversible by granting it
+again.
+
+**Make new accounts Subscribers**, or **close registration**. Settings, not deletions;
+Settings → General puts either back. On a network, registration is a network setting and the
+screen says so rather than offering a button that would change nothing.
 
 **Nothing here deletes an account, or anything it created.** `wp_delete_user()` reassigns or
 destroys the account's posts, and those posts are the record of what it did.

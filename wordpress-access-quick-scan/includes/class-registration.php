@@ -43,16 +43,74 @@ class WPAQS_Registration {
 	/**
 	 * Current state.
 	 *
-	 * @return array array( open, role, caps )
+	 * On multisite `users_can_register` is not consulted by WordPress at all — the network
+	 * option `registration` decides, and it carries four values rather than a flag. Reading
+	 * the single-site option there would report a closed site as open, or the reverse,
+	 * depending on a setting nothing honours.
+	 *
+	 * @return array array( open, role, caps, network )
 	 */
 	public static function state() {
-		$role = (string) get_option( 'default_role', 'subscriber' );
+		$role    = (string) get_option( 'default_role', 'subscriber' );
+		$network = is_multisite();
+
+		if ( $network ) {
+			$setting = (string) get_site_option( 'registration', 'none' );
+			$open    = in_array( $setting, array( 'user', 'all' ), true );
+		} else {
+			$open = (bool) get_option( 'users_can_register', false );
+		}
 
 		return array(
-			'open' => (bool) get_option( 'users_can_register', false ),
-			'role' => $role,
-			'caps' => self::privileged_caps( $role ),
+			'open'    => $open,
+			'role'    => $role,
+			'caps'    => self::privileged_caps( $role ),
+			'network' => $network,
 		);
+	}
+
+	/**
+	 * Set the role a new account receives to the one that can only read.
+	 *
+	 * A setting, not a deletion: Settings then General puts it back, and no account already
+	 * created is touched. What it closes is the path where the next stranger to fill in the
+	 * form holds a role that can publish.
+	 *
+	 * @return array array( error )
+	 */
+	public static function park_default_role() {
+		$state = self::state();
+
+		if ( ! $state['open'] || empty( $state['caps'] ) ) {
+			return array( 'error' => __( 'Registration on this site no longer hands out a privileged role, so there is nothing to change.', 'wpaqs' ) );
+		}
+
+		update_option( 'default_role', 'subscriber' );
+
+		return array( 'error' => '' );
+	}
+
+	/**
+	 * Close public registration.
+	 *
+	 * @return array array( error )
+	 */
+	public static function close() {
+		$state = self::state();
+
+		if ( $state['network'] ) {
+			// The network option governs every site, so a per-site screen is the wrong place
+			// to change it. Naming where it lives is more use than a button that lies.
+			return array( 'error' => __( 'On a network, registration is a network setting rather than a per-site one. Change it under Network Admin then Settings, where it applies to every site at once.', 'wpaqs' ) );
+		}
+
+		if ( ! $state['open'] ) {
+			return array( 'error' => __( 'Registration is already closed on this site.', 'wpaqs' ) );
+		}
+
+		update_option( 'users_can_register', 0 );
+
+		return array( 'error' => '' );
 	}
 
 	/**
@@ -102,7 +160,8 @@ class WPAQS_Registration {
 				'open_registration_privileged_role',
 				'option:users_can_register',
 				sprintf(
-					'users_can_register=1 default_role=%1$s grants=%2$s',
+					'%1$s default_role=%2$s grants=%3$s',
+					$state['network'] ? 'network_registration=open' : 'users_can_register=1',
 					$state['role'],
 					implode( ',', $state['caps'] )
 				)

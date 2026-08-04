@@ -1,10 +1,11 @@
 <?php
 /**
- * The guards on the two actions.
+ * The guards on the actions.
  *
  * The refusal that matters is the self one: ending your own sessions signs you out of the
- * screen you are working from, in the middle of whatever brought you here. The other thing
- * worth pinning is that nothing in this plugin deletes an account.
+ * screen you are working from, mid-incident. The other things worth pinning are that every
+ * nonce is scoped to what its action touches — one lifted from another row must not work —
+ * and that nothing in this plugin deletes an account.
  */
 
 function get_userdata( $id ) {
@@ -131,6 +132,26 @@ check(
 	'revoking is scoped to the account and the password',
 	false !== strpos( $code, "'-revoke-' . \$user_id . '-' . \$uuid" )
 );
+
+check(
+	'removing a capability is scoped to the account and the capability',
+	false !== strpos( $code, "'-remove-cap-' . \$user_id . '-' . \$cap" )
+);
+
+check(
+	'ending one session is scoped to the session',
+	false !== strpos( $code, "'-end-session-' . \$user_id . '-' . \$verifier" ),
+	'a nonce lifted from another row would end the wrong session'
+);
+
+// The two settings changes are site-wide, so their nonces have nothing to scope to — but
+// they must still have one.
+foreach ( array( '-park-default-role', '-close-registration' ) as $action ) {
+	check(
+		'the ' . $action . ' action carries a nonce',
+		false !== strpos( $code, $action )
+	);
+}
 
 check(
 	'the password is checked against live state',

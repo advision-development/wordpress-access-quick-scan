@@ -2,14 +2,29 @@
 /**
  * Registration posture: the combination fires, each half alone does not.
  *
- * This is the plugin's one deterministic rule, and the reason it is worth having is the
- * reason it is worth testing carefully: open registration alone is how membership sites
- * work, and a custom default role alone is a normal choice. Reporting either would make
- * the plugin cry wolf on ordinary sites.
+ * Open registration alone is how membership sites work, and a custom default role alone is a
+ * normal choice, so reporting either would make the plugin cry wolf on ordinary sites.
+ *
+ * The two fixes are tested by what they clear rather than by what they write: a finding with
+ * no resolution is noise, so each one has to make the rule stop firing.
  */
 
 function get_option( $name, $default = false ) {
 	return isset( $GLOBALS['options'][ $name ] ) ? $GLOBALS['options'][ $name ] : $default;
+}
+
+function get_site_option( $name, $default = false ) {
+	return isset( $GLOBALS['site_options'][ $name ] ) ? $GLOBALS['site_options'][ $name ] : $default;
+}
+
+function is_multisite() {
+	return ! empty( $GLOBALS['multisite'] );
+}
+
+function update_option( $name, $value, $autoload = null ) {
+	$GLOBALS['options'][ $name ] = $value;
+
+	return true;
 }
 
 function get_role( $name ) {
@@ -98,5 +113,63 @@ $state              = WPAQS_Registration::state();
 check( 'state reports the role', 'author' === $state['role'] );
 check( 'state reports open', true === $state['open'] );
 check( 'state lists the privileged capabilities', in_array( 'publish_posts', $state['caps'], true ) );
+
+// ------------------------------------------------------------------ multisite
+
+// WordPress does not consult users_can_register on a network: the `registration` site option
+// decides. Reading the wrong one reports a closed network as open, or the reverse.
+$GLOBALS['multisite']    = true;
+$GLOBALS['options']      = array( 'users_can_register' => 0, 'default_role' => 'author' );
+$GLOBALS['site_options'] = array( 'registration' => 'user' );
+
+check(
+	'on a network the site option decides',
+	1 === count( WPAQS_Registration::findings() ),
+	'users_can_register is 0 here and WordPress ignores it'
+);
+
+$GLOBALS['site_options'] = array( 'registration' => 'none' );
+
+check( 'and a closed network is silent', array() === WPAQS_Registration::findings() );
+
+check(
+	'closing registration is refused on a network',
+	false !== stripos( WPAQS_Registration::close()['error'], 'network setting' ),
+	'it governs every site, so a per-site screen must not offer it'
+);
+
+$GLOBALS['multisite'] = false;
+
+// ------------------------------------------------------------------- the fixes
+
+$GLOBALS['options'] = array( 'users_can_register' => 1, 'default_role' => 'author' );
+
+$parked = WPAQS_Registration::park_default_role();
+
+check( 'parking the default role succeeds', '' === $parked['error'], $parked['error'] );
+check( 'and the option is now subscriber', 'subscriber' === $GLOBALS['options']['default_role'] );
+check( 'which clears the finding', array() === WPAQS_Registration::findings(), 'a finding with no resolution is noise' );
+
+// Registration itself is left alone: a membership site needs it open, and the role was the
+// problem.
+check( 'and registration is still open', 1 === $GLOBALS['options']['users_can_register'] );
+
+$GLOBALS['options'] = array( 'users_can_register' => 1, 'default_role' => 'author' );
+
+$closed = WPAQS_Registration::close();
+
+check( 'closing registration succeeds', '' === $closed['error'], $closed['error'] );
+check( 'and the option is off', 0 === $GLOBALS['options']['users_can_register'] );
+check( 'which also clears the finding', array() === WPAQS_Registration::findings() );
+
+// Neither fix should claim to have done something when there was nothing to do.
+check( 'closing an already closed site is refused', '' !== WPAQS_Registration::close()['error'] );
+
+$GLOBALS['options'] = array( 'users_can_register' => 1, 'default_role' => 'subscriber' );
+
+check(
+	'parking a role that is already unprivileged is refused',
+	'' !== WPAQS_Registration::park_default_role()['error']
+);
 
 finish();

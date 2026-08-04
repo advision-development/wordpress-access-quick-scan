@@ -428,6 +428,59 @@ class WPAQS_Accounts {
 	}
 
 	/**
+	 * Take a directly-granted capability off an account.
+	 *
+	 * Only a capability the account holds **directly**, and the role is not touched: removing
+	 * something a role grants would be undone the moment WordPress read the role again, so
+	 * this would be a button that appears to work.
+	 *
+	 * Reversible by granting it again, which is the whole reason it is offered — the finding
+	 * it clears asks the operator to confirm a grant, and confirming sometimes ends in
+	 * removing it.
+	 *
+	 * @param int    $user_id User id.
+	 * @param string $cap     Capability name.
+	 * @return array array( error )
+	 */
+	public static function remove_direct_capability( $user_id, $cap ) {
+		$user_id = (int) $user_id;
+		$cap     = (string) $cap;
+
+		$user = get_userdata( $user_id );
+
+		if ( ! $user ) {
+			return array( 'error' => __( 'That account no longer exists.', 'wpaqs' ) );
+		}
+
+		if ( get_current_user_id() === $user_id ) {
+			return array( 'error' => __( 'That is the account you are signed in with. Taking a capability off it could remove your own access to this screen — use another administrator account.', 'wpaqs' ) );
+		}
+
+		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+			return array( 'error' => __( 'This site does not let you edit that account.', 'wpaqs' ) );
+		}
+
+		// Live, not from a report. A capability removed by somebody else since this screen was
+		// drawn is not something to act on, and one that only ever came from a role was never
+		// this button's to take away.
+		$direct = self::direct_capabilities( $user, self::registered_roles() );
+
+		if ( ! in_array( $cap, $direct, true ) ) {
+			return array( 'error' => __( 'That capability is not granted directly to that account any more. If the account still holds it, the grant comes from its role — change the role, or the role itself, rather than the account.', 'wpaqs' ) );
+		}
+
+		if ( ! in_array( $cap, self::NOTABLE_CAPS, true ) ) {
+			// The screen only reports notable capabilities, so a request for anything else did
+			// not come from a button on it.
+			return array( 'error' => __( 'That capability is not one this screen offers to change.', 'wpaqs' ) );
+		}
+
+		$user->remove_cap( $cap );
+
+		return array( 'error' => '' );
+	}
+
+	/**
 	 * How many accounts the site has.
 	 *
 	 * @return int
@@ -447,7 +500,7 @@ class WPAQS_Accounts {
 	 *
 	 * @return array
 	 */
-	private static function registered_roles() {
+	public static function registered_roles() {
 		if ( ! function_exists( 'wp_roles' ) ) {
 			return array();
 		}
