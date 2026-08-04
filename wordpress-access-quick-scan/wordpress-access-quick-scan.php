@@ -3,7 +3,7 @@
  * Plugin Name:       WordPress Access Quick Scan
  * Plugin URI:        https://advisiondevelopment.com/
  * Description:       Answers one question: who has access to this site right now, and does any of it look wrong. Lists every account with the capabilities it actually holds, every live session with its IP and user agent, and every application password with when and where it was last used. Reading the screen changes nothing. Two actions do, and each has to be pressed by a person: end an account's sessions, and revoke an application password.
- * Version:           0.1.1
+ * Version:           0.1.2
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Advision Development
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPAQS_VERSION', '0.1.1' );
+define( 'WPAQS_VERSION', '0.1.2' );
 define( 'WPAQS_FILE', __FILE__ );
 define( 'WPAQS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPAQS_URL', plugin_dir_url( __FILE__ ) );

@@ -122,7 +122,14 @@ class WPAQS_Findings {
 	/** A group needs this many entries before its wording is folded into the header. */
 	const GROUP_MIN = 2;
 
-	/** At this many, the entry list opens collapsed behind a summary naming the count. */
+	/**
+	 * At this many entries, the card itself opens collapsed.
+	 *
+	 * The threshold sits on the card rather than on the entry list inside it. There is one
+	 * fold per card, because you open a card precisely to see its entries — a second toggle
+	 * around them adds a click to the same intent. A card holding this many or more starts
+	 * closed so a long screen reads as an index of what was found instead of a wall.
+	 */
 	const GROUP_COLLAPSE = 6;
 
 	/**

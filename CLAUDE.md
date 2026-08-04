@@ -177,6 +177,13 @@ rather than which account has one. There is **exactly one Revoke control on the 
 `test-markup.php` counts them: the same password with a button in two places is two chances
 to be surprised.
 
+**One fold per thing, never two.** Sections fold, and each findings card folds. What does
+*not* fold is the entry list inside a card: you open a card precisely to see its entries, so
+a toggle around them adds a click to the same intent. `WPAQS_Findings::GROUP_COLLAPSE`
+therefore sits on the **card** — six or more entries and it opens closed, which is what stops
+a long screen opening on a wall. `test-markup.php` counts the `<details>` inside
+`render_group()` and asserts there is exactly one.
+
 **A card that folds is a `<details>` whose `<summary>` holds the `<h2>`**, so the heading
 stays the click target. `display: flex` on a summary removes the browser's own disclosure
 marker, so one is drawn and rotated in CSS — the sibling shipped three collapsible sections

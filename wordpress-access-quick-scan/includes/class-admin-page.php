@@ -164,18 +164,35 @@ class WPAQS_Admin_Page {
 	 * @return void
 	 */
 	private static function render_findings( array $findings ) {
+		$groups = WPAQS_Findings::group( $findings );
 		?>
-		<div class="wpaqs-card">
-			<h2><?php esc_html_e( 'What stood out', 'wpaqs' ); ?></h2>
+		<details class="wpaqs-card wpaqs-collapsible" open>
+			<summary>
+				<h2><?php esc_html_e( 'What stood out', 'wpaqs' ); ?></h2>
+				<span class="description">
+					<?php if ( empty( $findings ) ) : ?>
+						<?php esc_html_e( 'nothing', 'wpaqs' ); ?>
+					<?php else : ?>
+						<?php
+						printf(
+							/* translators: 1: number of findings, 2: number of cards they fold into. */
+							esc_html( _n( '%1$s finding in %2$s group', '%1$s findings in %2$s groups', count( $findings ), 'wpaqs' ) ),
+							esc_html( number_format_i18n( count( $findings ) ) ),
+							esc_html( number_format_i18n( count( $groups ) ) )
+						);
+						?>
+					<?php endif; ?>
+				</span>
+			</summary>
 
 			<?php if ( empty( $findings ) ) : ?>
 				<p><?php esc_html_e( 'Nothing stood out in what this screen can see. That is not the same as the site being fine — read what it does not check, at the bottom.', 'wpaqs' ); ?></p>
 			<?php else : ?>
-				<?php foreach ( WPAQS_Findings::group( $findings ) as $group ) : ?>
+				<?php foreach ( $groups as $group ) : ?>
 					<?php self::render_group( $group ); ?>
 				<?php endforeach; ?>
 			<?php endif; ?>
-		</div>
+		</details>
 		<?php
 	}
 
@@ -192,11 +209,11 @@ class WPAQS_Admin_Page {
 	 * @return void
 	 */
 	private static function render_group( array $group ) {
-		$total    = count( $group['entries'] );
-		$collapse = $total >= WPAQS_Findings::GROUP_COLLAPSE;
+		$total = count( $group['entries'] );
+		$open  = $total < WPAQS_Findings::GROUP_COLLAPSE;
 		?>
-		<div class="wpaqs-finding wpaqs-sev-<?php echo esc_attr( $group['severity'] ); ?>">
-			<div class="wpaqs-finding-head">
+		<details class="wpaqs-finding wpaqs-collapsible wpaqs-sev-<?php echo esc_attr( $group['severity'] ); ?>" <?php echo $open ? 'open' : ''; ?>>
+			<summary class="wpaqs-finding-head">
 				<span class="wpaqs-badge wpaqs-sev-<?php echo esc_attr( $group['severity'] ); ?>">
 					<?php echo esc_html( self::severity_label( $group['severity'] ) ); ?>
 				</span>
@@ -213,28 +230,13 @@ class WPAQS_Admin_Page {
 					</span>
 				<?php endif; ?>
 				<span class="wpaqs-rule"><?php echo esc_html( $group['rule'] ); ?></span>
-			</div>
+			</summary>
 
 			<?php if ( '' !== $group['detail'] ) : ?>
 				<p><?php echo esc_html( $group['detail'] ); ?></p>
 			<?php endif; ?>
 
-			<?php if ( $collapse ) : ?>
-				<details class="wpaqs-collapsible">
-					<summary>
-						<?php
-						printf(
-							/* translators: %s: number of entries behind the toggle. */
-							esc_html( _n( 'Show the %s one', 'Show all %s', $total, 'wpaqs' ) ),
-							esc_html( number_format_i18n( $total ) )
-						);
-						?>
-					</summary>
-					<?php self::render_entries( $group ); ?>
-				</details>
-			<?php else : ?>
-				<?php self::render_entries( $group ); ?>
-			<?php endif; ?>
+			<?php self::render_entries( $group ); ?>
 
 			<?php if ( '' !== $group['recommendation'] ) : ?>
 				<p class="wpaqs-recommendation">
@@ -242,7 +244,7 @@ class WPAQS_Admin_Page {
 					<?php echo esc_html( $group['recommendation'] ); ?>
 				</p>
 			<?php endif; ?>
-		</div>
+		</details>
 		<?php
 	}
 

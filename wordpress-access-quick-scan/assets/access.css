@@ -23,6 +23,27 @@
 .wpaqs-finding.wpaqs-sev-medium   { border-left-color: #72aee6 }
 .wpaqs-finding.wpaqs-sev-info     { border-left-color: #8c8f94 }
 
+summary.wpaqs-finding-head {
+	cursor: pointer;
+	list-style: none;
+}
+
+summary.wpaqs-finding-head::-webkit-details-marker { display: none }
+
+/* The card's own arrow, drawn because display:flex removes the native one. */
+summary.wpaqs-finding-head::before {
+	content: "";
+	flex: 0 0 auto;
+	width: 0;
+	height: 0;
+	border-left: 5px solid #646970;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	transition: transform 0.1s ease;
+}
+
+details.wpaqs-finding[open] > summary.wpaqs-finding-head::before { transform: rotate(90deg) }
+
 .wpaqs-finding-head {
 	display: flex;
 	align-items: center;

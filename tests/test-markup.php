@@ -103,6 +103,7 @@ function method_body( $source, $name ) {
 }
 
 $source          = file_get_contents( $page );
+$styles          = file_get_contents( dirname( __DIR__ ) . '/wordpress-access-quick-scan/assets/access.css' );
 $controller_code = code_only( file_get_contents( $controller ) );
 $page_code       = code_only( $source );
 
@@ -237,6 +238,62 @@ check(
 	false !== strpos( $source, 'wpaqs-count' )
 );
 
+// The findings section folds, and so does each card inside it. One fold per card: an inner
+// toggle around the entries would add a click to the intent of opening the card.
+check(
+	'the findings section is a collapsible',
+	false !== strpos( substr( $source, 0, strpos( $source, "esc_html_e( 'What stood out'" ) ), 'wpaqs-collapsible' ),
+	'the section that answers the question has to fold too'
+);
+
+check(
+	'and it is open by default',
+	false !== strpos( substr( $source, 0, strpos( $source, "esc_html_e( 'What stood out'" ) ), 'wpaqs-collapsible" open' ),
+	'the answer should not need a click'
+);
+
+check(
+	'a closed findings section still says what it holds',
+	false !== strpos( $source, "'%1\$s finding in %2\$s group'" ),
+	'a fold that hides the count hides whether anything was found at all'
+);
+
+$group_body = method_body( $source, 'render_group' );
+
+check(
+	'each card is a collapsible of its own',
+	'' !== $group_body && false !== strpos( $group_body, '<details class="wpaqs-finding wpaqs-collapsible' )
+);
+
+check(
+	'its header is the click target',
+	'' !== $group_body && false !== strpos( $group_body, '<summary class="wpaqs-finding-head">' ),
+	'the badge, title and count stay visible when it is shut'
+);
+
+check(
+	'a card with many entries starts closed',
+	'' !== $group_body && false !== strpos( $group_body, 'WPAQS_Findings::GROUP_COLLAPSE' ),
+	'opening on a wall of entries is the thing the threshold exists for'
+);
+
+check(
+	'and there is no second toggle inside it',
+	'' !== $group_body && 1 === preg_match_all( '~<details~', $group_body ),
+	'one fold per card: you open a card to see its entries'
+);
+
+// The card summary is flexed too, so it needs its own drawn arrow.
+check(
+	'the card summary draws an arrow',
+	false !== strpos( $styles, 'summary.wpaqs-finding-head::before' )
+);
+
+check(
+	'and it turns when the card is open',
+	false !== strpos( $styles, 'details.wpaqs-finding[open] > summary.wpaqs-finding-head::before' )
+);
+
 // The entry's own remainder prints unconditionally. Gating it on the header having shared
 // nothing is how the sibling made a date vanish from every grouped card.
 $entries = method_body( $source, 'render_entries' );
@@ -254,8 +311,6 @@ check(
 	preg_match_all( '~<details~', $source ) === preg_match_all( '~</details>~', $source ),
 	'an unclosed details swallows the rest of the page'
 );
-
-$styles = file_get_contents( dirname( __DIR__ ) . '/wordpress-access-quick-scan/assets/access.css' );
 
 // display:flex on a summary removes the browser's own disclosure marker, so one has to be
 // drawn — the sibling shipped three collapsible sections with no arrow at all.

@@ -3,6 +3,20 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.1.2
+
+**Every section folds now, and so does every card inside the findings.** With five rules
+firing the screen ran long enough that reading it meant scrolling, and the header of a shut
+card — badge, title, count — is enough to decide whether to open it. The findings section
+opens by default and says how many findings sit in how many groups even when shut, because a
+fold that hides the count hides whether anything was found at all.
+
+**One fold per card, not two.** The entry list used to collapse on its own at six or more,
+inside a card that was always open. That toggle is gone and the threshold moved up to the
+card: you open a card precisely to see its entries, so an inner toggle only adds a click to
+the same intent. A card holding six or more starts closed, which is what stops a long screen
+opening on a wall.
+
 ## 0.1.1
 
 **Application passwords have their own section.** They had a column in the accounts table,
