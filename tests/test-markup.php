@@ -583,5 +583,41 @@ check(
 	'two opening tags in two branches is one unclosed list'
 );
 
+// The view control, and the two things a filter must not do: hide rows without saying how
+// many, and let an empty filtered table read as an empty site.
+check(
+	'the account table has a view control',
+	false !== strpos( $source, "WPAQS_Filter::url( 'accounts'" )
+);
+
+check(
+	'and it says how many rows it hid',
+	false !== strpos( $source, 'accounts with no open session are hidden' ),
+	'two rows where there were 140 otherwise reads as 138 accounts gone'
+);
+
+check(
+	'and an empty filtered table does not read as an empty site',
+	false !== strpos( $source, 'That is the normal state of a site nobody is working on' ),
+	'"nothing here" has to mean that rather than "nothing in this view"'
+);
+
+// The cap notice counts what the screen read, which the filter does not change. Off the
+// filtered list it would say the screen read two of the site's 141 newest.
+check(
+	'the cap notice is not counted off the filtered list',
+	false !== strpos( $page_code, '$read             = count( $accounts[\'rows\'] );' )
+	&& false !== strpos( $page_code, 'number_format_i18n( $read )' ),
+	'it would otherwise say the screen read two of the site\'s 141 newest'
+);
+
+// Every link on this screen goes through WPAQS_Screen, which is what stops one control
+// dropping another's argument.
+check(
+	'no link to this screen is built by hand',
+	false === strpos( $page_code, "admin_url( 'tools.php?page=' . WPAQS_SLUG )" ),
+	'a link built from scratch drops whatever else is in the address'
+);
+
 printf( "\n%d failure(s)\n", $GLOBALS['wpaqs_failures'] );
 exit( $GLOBALS['wpaqs_failures'] > 0 ? 1 : 0 );

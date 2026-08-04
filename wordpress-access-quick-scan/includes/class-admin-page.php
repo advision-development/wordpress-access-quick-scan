@@ -352,6 +352,29 @@ class WPAQS_Admin_Page {
 				return $row['registered'];
 			}
 		);
+
+		// Filtered after sorting, never before: filtering first would sort a shorter list and
+		// give the same answer, but switching back to every row would then need the sort run
+		// again, and two places deciding the order is how one of them drifts.
+		$view     = WPAQS_Filter::requested( 'accounts' );
+		$filtered = WPAQS_Filter::apply(
+			$accounts['rows'],
+			$view,
+			function ( $row ) use ( $sessions ) {
+				// Open, not merely stored. An account whose every session has lapsed is exactly
+				// what this view exists to get out of the way.
+				$rows = isset( $sessions[ $row['id'] ] ) ? $sessions[ $row['id'] ] : array();
+
+				return ! empty( WPAQS_Sessions::open( $rows ) );
+			}
+		);
+
+		// The number the cap notice talks about is how many accounts this screen *read*, which
+		// the filter does not change. Reading it off the filtered list would have the notice
+		// say the screen read two of the site's 141 newest.
+		$read             = count( $accounts['rows'] );
+		$shown            = $filtered['rows'];
+		$accounts['rows'] = $shown;
 		?>
 		<?php // Open by default: this table is the answer, not reference material. It folds
 			// because on a membership site it runs to hundreds of rows and somebody reading
@@ -363,8 +386,8 @@ class WPAQS_Admin_Page {
 					<?php
 					printf(
 						/* translators: %s: number of accounts. */
-						esc_html( _n( '%s account', '%s accounts', count( $accounts['rows'] ), 'wpaqs' ) ),
-						esc_html( number_format_i18n( count( $accounts['rows'] ) ) )
+						esc_html( _n( '%s account', '%s accounts', count( $shown ), 'wpaqs' ) ),
+						esc_html( number_format_i18n( count( $shown ) ) )
 					);
 					?>
 				</span>
@@ -374,12 +397,45 @@ class WPAQS_Admin_Page {
 				<?php
 				printf(
 					/* translators: %s: number of accounts shown. */
-					esc_html( _n( '%s account, newest first.', '%s accounts, newest first.', count( $accounts['rows'] ), 'wpaqs' ) ),
-					esc_html( number_format_i18n( count( $accounts['rows'] ) ) )
+					esc_html( _n( '%s account, newest first.', '%s accounts, newest first.', count( $shown ), 'wpaqs' ) ),
+					esc_html( number_format_i18n( count( $shown ) ) )
 				);
 				?>
 				<?php esc_html_e( 'Capabilities listed under a login are ones granted to the account directly rather than through its role — the Users screen does not show these.', 'wpaqs' ); ?>
 			</p>
+
+			<?php // A filter that hides rows says how many it hid. A list of two where a moment
+				// ago there were 140 is indistinguishable from a site that lost 138 accounts,
+				// and "nothing here" has to mean that rather than "nothing in this view". ?>
+			<p class="wpaqs-filter">
+				<a class="button button-small" href="<?php echo esc_url( WPAQS_Filter::url( 'accounts', $view, 'wpaqs-accounts' ) ); ?>">
+					<?php
+					echo esc_html(
+						WPAQS_Filter::ACTIVE === $view
+							? __( 'Show every account', 'wpaqs' )
+							: __( 'Only accounts signed in right now', 'wpaqs' )
+					);
+					?>
+				</a>
+				<?php if ( WPAQS_Filter::ACTIVE === $view ) : ?>
+					<span class="description">
+						<?php
+						printf(
+							/* translators: %s: number of accounts hidden by the filter. */
+							esc_html( _n( '%s account with no open session is hidden.', '%s accounts with no open session are hidden.', $filtered['hidden'], 'wpaqs' ) ),
+							esc_html( number_format_i18n( $filtered['hidden'] ) )
+						);
+						?>
+					</span>
+				<?php endif; ?>
+			</p>
+
+			<?php if ( WPAQS_Filter::ACTIVE === $view && empty( $shown ) ) : ?>
+				<?php // An empty filtered table must not read as an empty site. ?>
+				<p class="description">
+					<?php esc_html_e( 'No account has a session open right now. That is the normal state of a site nobody is working on, and it is not a statement about the accounts themselves — press the button above to read them.', 'wpaqs' ); ?>
+				</p>
+			<?php endif; ?>
 
 			<?php if ( $accounts['capped'] ) : ?>
 				<div class="notice notice-warning inline">
@@ -388,7 +444,7 @@ class WPAQS_Admin_Page {
 						printf(
 							/* translators: 1: accounts shown, 2: accounts on the site. */
 							esc_html__( 'This site has %2$s accounts and this screen reads the %1$s newest. The rest were not looked at — they are not cleared, nobody checked them.', 'wpaqs' ),
-							esc_html( number_format_i18n( count( $accounts['rows'] ) ) ),
+							esc_html( number_format_i18n( $read ) ),
 							esc_html( number_format_i18n( $accounts['total'] ) )
 						);
 						?>

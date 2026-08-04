@@ -77,6 +77,16 @@ Stated on the screen too, because "nothing found" is not the same as "nothing th
   plugin makes no network requests and holds no opinion about any of them.
 - **Files, core, and hardening settings.** A different question and a different plugin.
 
+## Only what is active
+
+The account table has a link reading **Only accounts signed in right now**. On a site with a
+few hundred accounts nearly every row says "none open", and the two that do not are the answer
+to whether anybody is in there.
+
+It says how many rows it hid, and if nothing matches it says so as a property of the view
+rather than of the site. Sorting and filtering preserve each other: every link to this screen
+is built in one place, so a column header cannot drop the filter.
+
 ## Sorting
 
 Every table sorts by clicking a column header — application passwords by name, account, created

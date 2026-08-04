@@ -9,7 +9,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 STATUS=0
 
-for suite in test-accounts.php test-sessions.php test-app-passwords.php test-registration.php test-actions.php test-sort.php test-group.php test-timeline.php test-markup.php; do
+for suite in test-accounts.php test-sessions.php test-app-passwords.php test-registration.php test-actions.php test-sort.php test-group.php test-timeline.php test-filter.php test-markup.php; do
 	echo "=============================================================="
 	echo "  ${suite}"
 	echo "=============================================================="

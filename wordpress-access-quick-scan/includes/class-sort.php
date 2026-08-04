@@ -151,17 +151,18 @@ class WPAQS_Sort {
 		$active = ( $current['key'] === $key );
 		$dir    = ( $active && 'asc' === $current['dir'] ) ? 'desc' : 'asc';
 
-		$url = add_query_arg(
+		// Through WPAQS_Screen rather than built here. This used to start from
+		// admin_url( 'tools.php?page=' . WPAQS_SLUG ) and add only the two sort arguments,
+		// which was correct while sorting was the only control on the screen and silently
+		// wrong the moment a filter arrived: pressing a column header would have dropped the
+		// filter, leaving a table showing everything under a control that said otherwise.
+		return WPAQS_Screen::url(
 			array(
 				self::key_arg( $table ) => $key,
 				self::dir_arg( $table ) => $dir,
 			),
-			// The constant rather than WPAQS_Admin_Page::SLUG: a sort helper has no business
-			// knowing which class renders the screen.
-			admin_url( 'tools.php?page=' . WPAQS_SLUG )
+			$anchor
 		);
-
-		return $url . '#' . $anchor;
 	}
 
 	/**
@@ -195,7 +196,7 @@ class WPAQS_Sort {
 	 * @param string $table Table identifier.
 	 * @return string
 	 */
-	private static function key_arg( $table ) {
+	public static function key_arg( $table ) {
 		return 'wpaqs_' . sanitize_key( $table ) . '_by';
 	}
 
@@ -205,7 +206,7 @@ class WPAQS_Sort {
 	 * @param string $table Table identifier.
 	 * @return string
 	 */
-	private static function dir_arg( $table ) {
+	public static function dir_arg( $table ) {
 		return 'wpaqs_' . sanitize_key( $table ) . '_dir';
 	}
 }

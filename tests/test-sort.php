@@ -19,7 +19,7 @@ function wp_unslash( $value ) {
 }
 
 function add_query_arg( $args, $url ) {
-	return $url . '&' . http_build_query( $args );
+	return empty( $args ) ? $url : $url . '&' . http_build_query( $args );
 }
 
 function admin_url( $path = '' ) {
@@ -28,6 +28,7 @@ function admin_url( $path = '' ) {
 
 require __DIR__ . '/bootstrap.php';
 
+load_class( 'screen' );
 load_class( 'sort' );
 
 /**

@@ -3,6 +3,41 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.6.0
+
+**Show only the accounts signed in right now.** A real site's table opened on 140 rows of which
+nearly every one read "none open". The information was right and there was too much of it: the
+accounts with a live session are the answer to "is anybody in there", and they were somewhere in
+the middle of six screens of scrolling.
+
+A link, not a checkbox, because this plugin has no JavaScript and the screen holds no state.
+Open means open — an account whose every session has lapsed is exactly what the view exists to
+get out of the way.
+
+**The filter says how many rows it hid**, and an empty filtered table says it is a view rather
+than a site with no accounts. A list of two where a moment ago there were 140 is
+indistinguishable from a site that lost 138, and "nothing here" has to mean that.
+
+**`WPAQS_Screen` now builds every link to this screen.** This is the part that would have broken
+quietly: `WPAQS_Sort::url()` built its link from `admin_url( 'tools.php?page=' . WPAQS_SLUG )`
+and added only the two sort arguments. Correct while sorting was the only control, and wrong the
+moment a second one existed — pressing a column header would have dropped the filter, leaving a
+table showing every row under a button saying otherwise. The same shape as the sibling's
+autostart loop: one control acting on the query string, another rewriting it without knowing.
+
+Arguments are carried through an allowlist rather than by copying `$_GET`, so no link this
+screen prints can carry something a request put there — not a `redirect_to`, not a nonce, and
+not the result of an action that would then be re-shown by pressing a column header.
+
+The cap notice counts what the screen *read*, which the filter does not change. Off the filtered
+list it would have said the screen read two of the site's 141 newest.
+
+**CI, and a release workflow.** The suite now runs on 7.4 and 8.3 on every push and pull
+request. Until this, the 7.4 floor rested entirely on a grep for PHP 8 syntax in `build.sh` and
+had never been executed. The release job asserts the tag matches **both** version strings — the
+header and `WPAQS_VERSION` — because the sibling checks only the header and its two have already
+drifted a patch apart.
+
 ## 0.5.1
 
 **Sessions that had expired were shown as open.** A real site's list carried a sign-in from

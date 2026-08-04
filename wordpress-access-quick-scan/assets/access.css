@@ -312,3 +312,16 @@ th.wpaqs-sorted-desc a { color: #1d2327 }
 	border-color: #8c8f94;
 	color: #646970;
 }
+
+/*
+ * The view control sits above its table with the count of what it hid beside it. The two
+ * belong on one line: a button that changes what a table shows, and a sentence saying what
+ * went missing, read as one statement or the button is a table that lost rows.
+ */
+.wpaqs-filter {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin: 12px 0;
+}

@@ -125,6 +125,9 @@ Four readers, each answering one question and testable on its own:
 | `WPAQS_App_Passwords` | `created`, `last_used`, `last_ip` per password |
 | `WPAQS_Registration` | `users_can_register` and `default_role`, together |
 
+`WPAQS_Screen`, `WPAQS_Sort` and `WPAQS_Filter` are the screen's controls. None of them reads the
+database and none renders; `WPAQS_Screen` is the only thing that builds a URL.
+
 `WPAQS_Timeline` reads nothing. It is handed what the readers already returned and orders it,
 which is why `test-timeline.php` asserts the file contains no `get_users`, `get_user_meta`,
 `$wpdb`, `get_posts` or `WP_Query`: a query in there would make opening the screen cost more
@@ -139,6 +142,20 @@ cannot drift from the sentence explaining it. Readers supply a target and an evi
 string and nothing else.
 
 ## Lessons, most of them inherited
+
+**Nothing builds a link to this screen by hand.** `WPAQS_Sort::url()` did — from
+`admin_url( 'tools.php?page=' . WPAQS_SLUG )` plus its own two arguments — which is correct while
+sorting is the only control and silently wrong the moment there is a second one: a column header
+would have dropped the filter and shown every row under a button saying otherwise. `WPAQS_Screen`
+owns the URL, carries the screen's arguments through an allowlist, and drops an argument by
+setting it to `''` so an unfiltered screen has a clean address. **When adding a control that acts
+on the query string, the question is what every *other* control does to that argument** — the same
+question the sibling's autostart loop answered wrongly.
+
+**A filter that hides rows says how many, and an empty filtered table says it is a view.** Two
+rows where a moment ago there were 140 is indistinguishable from a site that lost 138 accounts.
+This is the account cap's rule and the coverage panel's rule in a third place: dropped work is
+disclosed, and "not shown" is never "not there".
 
 **`session_tokens` does not hold only unexpired sessions.** This file said it did, and so did
 `class-sessions.php`'s own docblock, for four versions.
@@ -314,6 +331,7 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-app-passwords.php` | Unused, foreign address, no recorded address, and a password used from a live session's own IP |
 | `test-registration.php` | The combination fires; each half alone does not; `'0'` is not truthy |
 | `test-actions.php` | The self refusal, the multisite capability, nonce scoping, live existence, and that nothing calls a user delete |
+| `test-filter.php` | The view allowlist, the hidden count, that an empty result still reports the view, and that sorting and filtering preserve each other's arguments while carrying nothing else from the request |
 | `test-sort.php` | The allowlist, per-table isolation, numbers not sorting like text, never-used first, stable ties, and the link reversing the active column |
 | `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |
 | `test-timeline.php` | Ordering, both window exclusions, the disclosed cap keeping the newest end, the activation-key parser, and that the class runs no query |
