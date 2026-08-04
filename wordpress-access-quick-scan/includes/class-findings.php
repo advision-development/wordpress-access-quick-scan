@@ -57,12 +57,6 @@ class WPAQS_Findings {
 				'detail'         => __( 'The address that last authenticated with this password matches none of the addresses the account has an open session from. That is expected for a server-to-server integration, and it is also what a stolen credential looks like.', 'wpaqs' ),
 				'recommendation' => __( 'Decide which it is by naming the integration and the host it runs on. If you cannot, revoke the password: an integration that breaks tells you what it was, and a thief does not.', 'wpaqs' ),
 			),
-			'content_predates_account'          => array(
-				'severity'       => 'medium',
-				'title'          => __( 'Account holds content older than the account', 'wpaqs' ),
-				'detail'         => __( 'Posts owned by this account carry dates from before it was created. Nothing can write a post older than its author, so the content did not start out here. The ordinary explanation is a deleted account whose posts were reassigned to this one, which keeps their original dates — and that is a normal thing to have done.', 'wpaqs' ),
-				'recommendation' => __( 'Read the span in the evidence. Content covering a stretch of time before this account existed, and a good number of posts, is somebody else\'s work inherited when their account was deleted — nothing to do. A single post shortly before the account, or a handful with no reason to have been reassigned, is worth opening: a post row written straight into the database looks like this too, and WordPress records nothing that tells the two apart.', 'wpaqs' ),
-			),
 			'duplicate_account_email'          => array(
 				'severity'       => 'high',
 				'title'          => __( 'Two accounts share one email address', 'wpaqs' ),

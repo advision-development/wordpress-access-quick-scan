@@ -137,23 +137,23 @@ only capabilities that change the site are reported, because a direct grant of `
 noise. The sibling shipped a heuristic that matched a football site's own editorial content
 and had to narrow it; the lesson is to say what a rule cannot know.
 
-**Nothing here is arithmetic. `content_predates_account` was claimed to be, and was not.**
-`wp_insert_post()` will not write a post older than its author, which is true and was mistaken
-for proof — `wp_delete_user( $id, $reassign )` moves a deleted account's posts to another one
-and they keep their dates, so an ordinary tidy-up of the user list produces it. Shipped at
-critical saying there was no ordinary explanation; corrected to medium within a day, on a real
-site's report.
+**A finding nobody can resolve is noise, however true it is.** `content_predates_account`
+shipped in 0.2.0 and was gone by 0.2.2. It reported an account owning posts older than itself,
+which `wp_insert_post()` cannot produce — mistaken for proof, until a real site showed that
+`wp_delete_user( $id, $reassign )` produces it every time somebody deletes a colleague and
+keeps their work. WordPress records nothing about a reassignment, so the rule could not
+separate the two.
 
-WordPress records nothing about a reassignment, so the rule **cannot** separate the two. What
-it does instead is report the discriminator and leave the judgement with the operator: the
-oldest post, the **newest**, and the **count**. A span of years across hundreds of posts is
-inherited work; a single post shortly before the account is not. **When a rule cannot decide,
-its job is to hand over what it read** — not to pick the more alarming reading.
+It was demoted and reworded first, and removed once the real objection landed: **the dates
+never change, so the finding never clears.** Every site that has ever tidied up its users
+would carry it on every scan with no action that resolves it, which is how a findings list
+teaches people to skip it. Its actual reach was narrow too — a post written straight into the
+database usually reuses an author that already exists and is dated now, so it would not fire,
+and the sibling's `orphan_post_author` and `post_without_gmt_date` catch that case properly.
 
-It reads **both** date columns for the same reason the sibling's `post_without_gmt_date` does:
-a row written straight into the database often carries a local `post_date` and a zero
-`post_date_gmt`. `TOLERANCE` exists because an import can land registration and first post in
-the same moment.
+Two rules follow. **When a rule cannot decide, its job is to hand over what it read**, not to
+pick the more alarming reading. And **before adding a rule, ask what clears it** — a true
+finding with no resolution costs more attention than it returns.
 
 **A confusable-character fold has to be symmetric.** Mapping digits onto letters is not
 enough: `1` imitates both `i` and `l`, so mapping it to either leaves `adm1n` and `admin`
@@ -245,7 +245,6 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-sessions.php` | Scripted-versus-browser classification both ways, malformed session meta reported rather than skipped |
 | `test-app-passwords.php` | Unused, foreign address, no recorded address, and a password used from a live session's own IP |
 | `test-registration.php` | The combination fires; each half alone does not; `'0'` is not truthy |
-| `test-authorship.php` | An account younger than its own content, the zero-GMT fallback, the tolerance, and the benign cases: wrote after registering, started the same day, no posts |
 | `test-actions.php` | The self refusal, the multisite capability, nonce scoping, live existence, and that nothing calls a user delete |
 | `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |
 | `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap, grouped rendering, and that no evidence is echoed raw |

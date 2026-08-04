@@ -3,6 +3,22 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.2.2
+
+**`content_predates_account` is gone**, two versions after it arrived. Demoting and rewording
+it in 0.2.1 addressed the false positive and left the real problem: **the dates never change,
+so the finding never clears.** Any site that has ever deleted a user and kept their posts would
+carry it on every scan with nothing to do about it, and a findings list with a permanent
+unresolvable entry is a list people learn to skip.
+
+Its reach was also narrower than it looked. A post written straight into the database usually
+reuses an author that already exists and carries the date it was written, so the rule would not
+have fired on it — and Malware Quick Scan's `orphan_post_author` and `post_without_gmt_date`
+catch that case on the evidence rather than on a date comparison.
+
+What stays is the lesson, in the contributor notes: when a rule cannot decide, it hands over
+what it read; and before adding one, ask what clears it.
+
 ## 0.2.1
 
 **The rule shipped yesterday as arithmetic was a heuristic, and a noisy one.** Reported from

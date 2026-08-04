@@ -73,7 +73,6 @@ class WPAQS_Admin_Page {
 		$accounts = WPAQS_Accounts::all();
 		$findings = WPAQS_Accounts::findings( $accounts );
 		$findings = array_merge( $findings, WPAQS_Registration::findings() );
-		$findings = array_merge( $findings, WPAQS_Authorship::findings( $accounts, WPAQS_Authorship::earliest_posts() ) );
 
 		$sessions  = array();
 		$passwords = array();
