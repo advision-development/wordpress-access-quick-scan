@@ -247,5 +247,72 @@ check(
 	'the moment sharing works, a gated remainder disappears'
 );
 
+// Collapsible sections. Each one is a details, each summary holds its h2 so the heading
+// stays the click target, and every details closes.
+check(
+	'every details element closes',
+	preg_match_all( '~<details~', $source ) === preg_match_all( '~</details>~', $source ),
+	'an unclosed details swallows the rest of the page'
+);
+
+$styles = file_get_contents( dirname( __DIR__ ) . '/wordpress-access-quick-scan/assets/access.css' );
+
+// display:flex on a summary removes the browser's own disclosure marker, so one has to be
+// drawn — the sibling shipped three collapsible sections with no arrow at all.
+$flexed = (bool) preg_match( '~summary \{[^}]*display:\s*flex~s', $styles );
+$drawn  = false !== strpos( $styles, 'summary::before' );
+
+check( 'a flexed summary draws its own arrow', ! $flexed || $drawn, 'display:flex hides the native marker' );
+check( 'and the arrow turns when open', false !== strpos( $styles, '[open] > summary::before' ) );
+
+// Which sections fold, and which way up. The coverage list must not be open by default —
+// it is reference material — and it must not be removable either, so it is still a section.
+$accounts_card = strpos( $source, "esc_html_e( 'Who has access'" );
+$coverage_card = strpos( $source, "esc_html_e( 'What this does not check'" );
+// Anchored on the count in its summary, not on the heading: the heading also appears in the
+// one-line fallback rendered when this WordPress has no application passwords, and strpos
+// finds that one first. Same shape as a first-occurrence match that reads the wrong branch.
+$passwords_card = strpos( $source, "'%s active', '%s active'" );
+
+foreach ( array( 'Who has access' => $accounts_card, 'What this does not check' => $coverage_card, 'Application passwords' => $passwords_card ) as $name => $at ) {
+	check( 'the ' . $name . ' section exists', false !== $at );
+
+	if ( false === $at ) {
+		continue;
+	}
+
+	$before = substr( $source, max( 0, $at - 500 ), 500 );
+
+	check( 'and it is a collapsible card', false !== strpos( $before, 'wpaqs-collapsible' ) );
+	check( 'and its heading is the click target', false !== strpos( $before, '<summary>' ) );
+}
+
+// The inventory opens; the reference list does not. An operator should not have to hunt for
+// the answer, and should not have to scroll past four paragraphs of caveats to reach it.
+check(
+	'the coverage list is closed by default',
+	false === strpos( substr( $source, max( 0, $coverage_card - 500 ), 500 ), 'wpaqs-collapsible" open' ),
+	'reference material open by default is what buried the findings in the sibling'
+);
+
+// Application passwords have their own section rather than a column, and exactly one Revoke
+// control on the screen: two buttons for one password is two chances to be surprised.
+check(
+	'there is exactly one revoke control',
+	1 === substr_count( $source, 'value="wpaqs_revoke_password"' ),
+	'the same password had a button in two places'
+);
+
+check(
+	'the passwords section says why revoking is the only thing that stops one',
+	false !== strpos( $source, 'Revoking is the only thing that stops one' ),
+	'a password survives a password change and every session being ended'
+);
+
+check(
+	'and it flags a key that was never used',
+	false !== strpos( $source, "esc_html_e( 'never used'" )
+);
+
 printf( "\n%d failure(s)\n", $GLOBALS['wpaqs_failures'] );
 exit( $GLOBALS['wpaqs_failures'] > 0 ? 1 : 0 );

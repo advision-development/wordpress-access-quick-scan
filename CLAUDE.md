@@ -109,6 +109,9 @@ Four readers, each answering one question and testable on its own:
 | `WPAQS_App_Passwords` | `created`, `last_used`, `last_ip` per password |
 | `WPAQS_Registration` | `users_can_register` and `default_role`, together |
 
+The screen renders four sections: the findings, the account inventory, the application
+passwords, and what it cannot check. The last three fold.
+
 `WPAQS_Findings::catalog()` declares every rule's severity and wording once, so a severity
 cannot drift from the sentence explaining it. Readers supply a target and an evidence
 string and nothing else.
@@ -166,6 +169,20 @@ strings fails three assertions.
 **A shared header means the entry prints its remainder unconditionally.** Gating it on the
 header having shared nothing is how the sibling made a modification date vanish from every
 grouped card the moment sharing started working.
+
+**Application passwords get their own section, not a column.** One authenticates the REST
+API as its owner, survives a password change and survives every session being ended — so it
+is a key to the site rather than a detail about a person, and the question is how many exist
+rather than which account has one. There is **exactly one Revoke control on the screen**, and
+`test-markup.php` counts them: the same password with a button in two places is two chances
+to be surprised.
+
+**A card that folds is a `<details>` whose `<summary>` holds the `<h2>`**, so the heading
+stays the click target. `display: flex` on a summary removes the browser's own disclosure
+marker, so one is drawn and rotated in CSS — the sibling shipped three collapsible sections
+with no arrow, which reads as a dead card. The inventory and the passwords open by default;
+the coverage list does not, and `test-markup.php` asserts that direction rather than just
+asserting they collapse.
 
 **Sibling forms, never nested.** HTML terminates an outer form at an inner one. Both
 controls sit in one table cell and each is its own form; `test-markup.php` counts the

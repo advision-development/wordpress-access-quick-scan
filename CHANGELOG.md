@@ -3,6 +3,27 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.1.1
+
+**Application passwords have their own section.** They had a column in the accounts table,
+and that was the wrong home: one authenticates the REST API as its owner and never touches
+the login form, so it is a key to the site rather than a detail about a person. The question
+an operator asks is how many exist and whether they recognise them all, which a column
+repeated down a table of hundreds of rows cannot answer. Newest first, the owner named, an
+administrator's flagged as one, and a key never used flagged as that.
+
+Moving them also removed **a second Revoke button for the same password on the same
+screen**, and the section says the thing the column had no room for: an application password
+survives a password change and survives every session being ended, so revoking is the only
+thing that stops one.
+
+**The long sections fold.** The inventory and the application passwords open by default —
+they are the answer, not reference material — and the list of what the plugin cannot check is
+closed. It is still a section rather than a footnote, because "nothing found" and "nothing
+checked" are different answers and only that list tells them apart. A summary with
+`display: flex` loses the browser's own disclosure marker, so the arrow is drawn and rotated
+in CSS; the sibling shipped three collapsible sections with no arrow at all.
+
 ## 0.1.0
 
 First version. One screen, read live, no scan.

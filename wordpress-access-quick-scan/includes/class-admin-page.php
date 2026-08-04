@@ -103,7 +103,8 @@ class WPAQS_Admin_Page {
 
 			<?php self::render_notice(); ?>
 			<?php self::render_findings( $findings ); ?>
-			<?php self::render_accounts( $accounts, $sessions, $passwords ); ?>
+			<?php self::render_accounts( $accounts, $sessions ); ?>
+			<?php self::render_passwords( $accounts, $passwords ); ?>
 			<?php self::render_coverage(); ?>
 		</div>
 		<?php
@@ -288,10 +289,24 @@ class WPAQS_Admin_Page {
 	 * @param array $passwords User id => application passwords.
 	 * @return void
 	 */
-	private static function render_accounts( array $accounts, array $sessions, array $passwords ) {
+	private static function render_accounts( array $accounts, array $sessions ) {
 		?>
-		<div class="wpaqs-card">
-			<h2><?php esc_html_e( 'Who has access', 'wpaqs' ); ?></h2>
+		<?php // Open by default: this table is the answer, not reference material. It folds
+			// because on a membership site it runs to hundreds of rows and somebody reading
+			// the findings above wants it out of the way, not hidden. ?>
+		<details class="wpaqs-card wpaqs-collapsible" open>
+			<summary>
+				<h2><?php esc_html_e( 'Who has access', 'wpaqs' ); ?></h2>
+				<span class="description">
+					<?php
+					printf(
+						/* translators: %s: number of accounts. */
+						esc_html( _n( '%s account', '%s accounts', count( $accounts['rows'] ), 'wpaqs' ) ),
+						esc_html( number_format_i18n( count( $accounts['rows'] ) ) )
+					);
+					?>
+				</span>
+			</summary>
 
 			<p class="description">
 				<?php
@@ -325,15 +340,13 @@ class WPAQS_Admin_Page {
 						<th scope="col"><?php esc_html_e( 'Account', 'wpaqs' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Role and extra capabilities', 'wpaqs' ); ?></th>
 						<th scope="col"><?php esc_html_e( 'Live sessions', 'wpaqs' ); ?></th>
-						<th scope="col"><?php esc_html_e( 'Application passwords', 'wpaqs' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php foreach ( $accounts['rows'] as $row ) : ?>
 						<?php
-						$rows_sessions  = isset( $sessions[ $row['id'] ] ) ? $sessions[ $row['id'] ] : array();
-						$rows_passwords = isset( $passwords[ $row['id'] ] ) ? $passwords[ $row['id'] ] : array();
-						$refusal        = WPAQS_Controller::session_refusal( $row['id'] );
+						$rows_sessions = isset( $sessions[ $row['id'] ] ) ? $sessions[ $row['id'] ] : array();
+						$refusal       = WPAQS_Controller::session_refusal( $row['id'] );
 						?>
 						<tr>
 							<td>
@@ -390,44 +403,142 @@ class WPAQS_Admin_Page {
 									<?php endif; ?>
 								<?php endif; ?>
 							</td>
-							<td>
-								<?php if ( ! WPAQS_App_Passwords::available() ) : ?>
-									<span class="description"><?php esc_html_e( 'not supported by this WordPress', 'wpaqs' ); ?></span>
-								<?php elseif ( empty( $rows_passwords ) ) : ?>
-									<span class="description"><?php esc_html_e( 'none', 'wpaqs' ); ?></span>
-								<?php else : ?>
-									<?php foreach ( $rows_passwords as $password ) : ?>
-										<p class="wpaqs-password">
-											<strong><?php echo esc_html( '' === $password['name'] ? $password['uuid'] : $password['name'] ); ?></strong>
-											<br /><span class="description">
-												<?php
-												printf(
-													/* translators: 1: last used, 2: last address. */
-													esc_html__( 'last used %1$s from %2$s', 'wpaqs' ),
-													esc_html( WPAQS_App_Passwords::stamp( $password['last_used'] ) ),
-													esc_html( '' === $password['last_ip'] ? __( 'no address recorded', 'wpaqs' ) : $password['last_ip'] )
-												);
-												?>
-											</span>
-										</p>
-
-										<?php // Its own form, a sibling of the sessions one. Never nested: HTML terminates an outer form at an inner one. ?>
-										<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
-											onsubmit="return confirm( '<?php echo esc_js( __( 'Revoke this application password? This cannot be undone — the secret is deleted, not hidden. Anything using it stops working until somebody issues a new one. Browser sessions are unaffected.', 'wpaqs' ) ); ?>' );">
-											<input type="hidden" name="action" value="wpaqs_revoke_password" />
-											<input type="hidden" name="user_id" value="<?php echo esc_attr( (string) $row['id'] ); ?>" />
-											<input type="hidden" name="uuid" value="<?php echo esc_attr( $password['uuid'] ); ?>" />
-											<?php wp_nonce_field( WPAQS_NONCE . '-revoke-' . $row['id'] . '-' . $password['uuid'] ); ?>
-											<button type="submit" class="button button-small"><?php esc_html_e( 'Revoke', 'wpaqs' ); ?></button>
-										</form>
-									<?php endforeach; ?>
-								<?php endif; ?>
-							</td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>
 			</table>
-		</div>
+		</details>
+		<?php
+	}
+
+	/**
+	 * Every application password on the site, in one place.
+	 *
+	 * They had a column in the accounts table and that was the wrong home for them. An
+	 * application password authenticates the REST API as its owner and never touches the
+	 * login form, so it is a key to the site rather than a detail about a person — and the
+	 * question an operator asks is "how many of these exist and do I recognise them all",
+	 * which a column repeated down a table of hundreds of accounts cannot answer.
+	 *
+	 * Moving them here also removed a second Revoke button for the same password on the same
+	 * screen.
+	 *
+	 * @param array $accounts  Result of WPAQS_Accounts::all().
+	 * @param array $passwords User id => application passwords.
+	 * @return void
+	 */
+	private static function render_passwords( array $accounts, array $passwords ) {
+		if ( ! WPAQS_App_Passwords::available() ) {
+			?>
+			<div class="wpaqs-card">
+				<h2><?php esc_html_e( 'Application passwords', 'wpaqs' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'This WordPress version does not support them, so there are none to list.', 'wpaqs' ); ?></p>
+			</div>
+			<?php
+
+			return;
+		}
+
+		$rows = array();
+
+		foreach ( $accounts['rows'] as $account ) {
+			$owned = isset( $passwords[ $account['id'] ] ) ? $passwords[ $account['id'] ] : array();
+
+			foreach ( $owned as $password ) {
+				$rows[] = array(
+					'account'  => $account,
+					'password' => $password,
+				);
+			}
+		}
+
+		// Newest first: a key issued five minutes ago is the one worth looking at.
+		usort(
+			$rows,
+			function ( $a, $b ) {
+				return (int) $b['password']['created'] - (int) $a['password']['created'];
+			}
+		);
+		?>
+		<details class="wpaqs-card wpaqs-collapsible" open>
+			<summary>
+				<h2><?php esc_html_e( 'Application passwords', 'wpaqs' ); ?></h2>
+				<span class="description">
+					<?php
+					printf(
+						/* translators: %s: number of application passwords on the site. */
+						esc_html( _n( '%s active', '%s active', count( $rows ), 'wpaqs' ) ),
+						esc_html( number_format_i18n( count( $rows ) ) )
+					);
+					?>
+				</span>
+			</summary>
+
+			<p class="description">
+				<?php esc_html_e( 'Each one authenticates the REST API as its owner and bypasses the login form, so it keeps working after a password change and after every session is ended. Revoking is the only thing that stops one.', 'wpaqs' ); ?>
+			</p>
+
+			<?php if ( empty( $rows ) ) : ?>
+				<p><?php esc_html_e( 'None on this site.', 'wpaqs' ); ?></p>
+			<?php else : ?>
+				<table class="widefat striped wpaqs-table">
+					<thead>
+						<tr>
+							<th scope="col"><?php esc_html_e( 'Name', 'wpaqs' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Account', 'wpaqs' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Created', 'wpaqs' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Last used', 'wpaqs' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Action', 'wpaqs' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $rows as $row ) : ?>
+							<?php
+							$account  = $row['account'];
+							$password = $row['password'];
+							?>
+							<tr>
+								<td>
+									<strong><?php echo esc_html( '' === $password['name'] ? $password['uuid'] : $password['name'] ); ?></strong>
+									<?php if ( 0 === $password['last_used'] ) : ?>
+										<br /><span class="wpaqs-chip"><?php esc_html_e( 'never used', 'wpaqs' ); ?></span>
+									<?php endif; ?>
+								</td>
+								<td>
+									<?php echo esc_html( $account['login'] ); ?>
+									<?php if ( $account['is_admin'] ) : ?>
+										<br /><span class="wpaqs-chip"><?php esc_html_e( 'administrator', 'wpaqs' ); ?></span>
+									<?php endif; ?>
+								</td>
+								<td><?php echo esc_html( WPAQS_App_Passwords::stamp( $password['created'] ) ); ?></td>
+								<td>
+									<?php echo esc_html( WPAQS_App_Passwords::stamp( $password['last_used'] ) ); ?>
+									<br /><span class="description">
+										<?php
+										printf(
+											/* translators: %s: the address it was last used from. */
+											esc_html__( 'from %s', 'wpaqs' ),
+											esc_html( '' === $password['last_ip'] ? __( 'no address recorded', 'wpaqs' ) : $password['last_ip'] )
+										);
+										?>
+									</span>
+								</td>
+								<td>
+									<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
+										onsubmit="return confirm( '<?php echo esc_js( __( 'Revoke this application password? This cannot be undone — the secret is deleted, not hidden. Anything using it stops working until somebody issues a new one. Browser sessions are unaffected.', 'wpaqs' ) ); ?>' );">
+										<input type="hidden" name="action" value="wpaqs_revoke_password" />
+										<input type="hidden" name="user_id" value="<?php echo esc_attr( (string) $account['id'] ); ?>" />
+										<input type="hidden" name="uuid" value="<?php echo esc_attr( $password['uuid'] ); ?>" />
+										<?php wp_nonce_field( WPAQS_NONCE . '-revoke-' . $account['id'] . '-' . $password['uuid'] ); ?>
+										<button type="submit" class="button button-small"><?php esc_html_e( 'Revoke', 'wpaqs' ); ?></button>
+									</form>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</details>
 		<?php
 	}
 
@@ -441,8 +552,14 @@ class WPAQS_Admin_Page {
 	 */
 	private static function render_coverage() {
 		?>
-		<div class="wpaqs-card">
-			<h2><?php esc_html_e( 'What this does not check', 'wpaqs' ); ?></h2>
+		<?php // Closed by default. Reference material, and the findings are what the page is
+			// for — but never removed, because "nothing found" and "nothing checked" are
+			// different answers and only this list tells them apart. ?>
+		<details class="wpaqs-card wpaqs-collapsible">
+			<summary>
+				<h2><?php esc_html_e( 'What this does not check', 'wpaqs' ); ?></h2>
+				<span class="description"><?php esc_html_e( 'four things, and why', 'wpaqs' ); ?></span>
+			</summary>
 
 			<ul class="wpaqs-coverage">
 				<li>
@@ -462,7 +579,7 @@ class WPAQS_Admin_Page {
 					<?php esc_html_e( 'A different question and a different plugin: Malware Quick Scan reads the filesystem and the database for signs of compromise.', 'wpaqs' ); ?>
 				</li>
 			</ul>
-		</div>
+		</details>
 		<?php
 	}
 

@@ -164,3 +164,32 @@
 }
 
 .wpaqs-collapsible[open] > summary::before { transform: rotate(90deg) }
+
+/* A card that is also a details element. The summary holds the h2 so the heading stays
+   the click target, and display:flex on it kills the browser's own marker — hence the
+   arrow drawn above. */
+details.wpaqs-card > summary {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	cursor: pointer;
+	list-style: none;
+	font-size: inherit;
+	color: inherit;
+	margin: 0;
+}
+
+details.wpaqs-card > summary h2 {
+	display: inline;
+	margin: 0;
+}
+
+details.wpaqs-card[open] > summary {
+	margin-bottom: 0.75rem;
+}
+
+details.wpaqs-card > summary::before {
+	position: relative;
+	top: -0.1rem;
+	border-left-color: #646970;
+}
