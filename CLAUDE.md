@@ -149,6 +149,14 @@ package URL is checked against a pinned host, owner and repository rather than t
 API response, TLS verification is never relaxed, and a tag that is not a plain version is
 refused rather than interpreted.
 
+**The updater offers, and refuses to apply itself unattended.** The pinning answers a tampered
+response and nothing else. A release genuinely published from the pinned repository by somebody
+who should not have been able to publish it passes every check in the file, so the remaining
+control is the project's own rule turned on itself: a person presses it. `auto_update_plugin`
+returns false for this plugin only — returning false unconditionally would switch off automatic
+updates site-wide, which is not this plugin's business — and the toggle is replaced with the
+reason rather than removed.
+
 **A prefix check does not pin a repository.** The first version checked `strpos( $url, $prefix )`
 and parsed the host as a second check. The host check was dead — nothing passing the prefix can
 have another host, since a URL's authority ends at the first slash — and the comment justifying

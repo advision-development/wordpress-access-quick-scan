@@ -44,6 +44,10 @@ function plugin_basename( $file ) {
 	return 'wordpress-access-quick-scan/wordpress-access-quick-scan.php';
 }
 
+function esc_html__( $text, $domain = '' ) {
+	return $text;
+}
+
 function esc_html( $text ) {
 	return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' );
 }
@@ -375,6 +379,50 @@ check(
 check(
 	'and deleted as a site transient',
 	false !== strpos( file_get_contents( WPAQS_DIR . 'uninstall.php' ), 'delete_site_transient' )
+);
+
+// ------------------------------------------------- never updates itself unattended
+
+// The one risk the pinning cannot reduce: a release genuinely published from the pinned
+// repository by somebody who should not have been able to publish it is correctly hosted,
+// correctly named and correctly signed, and every check in this file passes it. What is left is
+// the plugin's own rule applied to itself — a person presses it.
+$file = 'wordpress-access-quick-scan/wordpress-access-quick-scan.php';
+
+check(
+	'this plugin refuses to update itself unattended',
+	false === WPAQS_Updater::never_automatically( true, (object) array( 'plugin' => $file ) ),
+	'a compromised release would otherwise install itself on the next cron run'
+);
+
+check(
+	'and refuses even when WordPress had not intended to',
+	false === WPAQS_Updater::never_automatically( null, (object) array( 'plugin' => $file ) )
+);
+
+// Returning false for everything would quietly switch off automatic updates site-wide, which
+// is a change to how the whole site is maintained and none of this plugin's business.
+check(
+	'another plugin keeps whatever WordPress decided',
+	true === WPAQS_Updater::never_automatically( true, (object) array( 'plugin' => 'akismet/akismet.php' ) ),
+	'returning false for everything would switch off automatic updates site-wide'
+);
+
+check( 'including when that was false', false === WPAQS_Updater::never_automatically( false, (object) array( 'plugin' => 'akismet/akismet.php' ) ) );
+check( 'and a malformed item is left alone', true === WPAQS_Updater::never_automatically( true, 'not an object' ) );
+check( 'as is one with no plugin file', true === WPAQS_Updater::never_automatically( true, new stdClass() ) );
+
+// A control that silently does nothing reads as broken, so the missing toggle is explained
+// where somebody wondering about it will look.
+check(
+	'the missing toggle says why it is missing',
+	false !== stripos( WPAQS_Updater::explain_no_auto_update( '<toggle />', $file ), 'by hand on purpose' ),
+	'a control that silently does nothing reads as broken'
+);
+
+check(
+	'and another plugin keeps its own toggle',
+	'<toggle />' === WPAQS_Updater::explain_no_auto_update( '<toggle />', 'akismet/akismet.php' )
 );
 
 finish();

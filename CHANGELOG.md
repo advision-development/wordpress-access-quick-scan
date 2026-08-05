@@ -33,6 +33,20 @@ that WordPress downloads, unzips over the plugin directory and runs on the next 
   hour per IP and a hosting provider's sites share one, so retrying on every admin page load
   is how one rate-limited site becomes every site on that host.
 
+**It offers the update and refuses to apply it unattended.** WordPress shows an "Enable
+auto-updates" toggle for anything reporting update information, and turning it on would mean a
+release installs itself on the next cron run with nobody present.
+
+That is the one risk none of the checks above reduce. Every one of them assumes the danger is a
+*tampered answer*. None helps if the release is genuinely published from the pinned repository by
+somebody who should not have been able to publish it: such a release is correctly hosted,
+correctly named, correctly signed, and passes every check. What is left is this project's own
+rule turned on itself — **a person presses it**. That makes a compromised release account mean
+every site whose operator pressed a button rather than every site at once.
+
+The toggle is replaced with a sentence saying why, because a control that silently does nothing
+reads as broken.
+
 `plugins_api` is filtered too, or the *View details* link beside the update opens a modal
 saying the plugin does not exist — a control that looks like it works and does not.
 

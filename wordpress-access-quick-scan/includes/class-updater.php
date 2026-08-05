@@ -71,6 +71,68 @@ class WPAQS_Updater {
 		add_filter( 'pre_set_site_transient_update_plugins', array( __CLASS__, 'offer' ) );
 		add_filter( 'plugins_api', array( __CLASS__, 'details' ), 10, 3 );
 		add_action( 'upgrader_process_complete', array( __CLASS__, 'forget' ), 10, 2 );
+
+		// Offered, never applied unattended. See never_automatically() for why this is the one
+		// risk the pinning cannot reduce.
+		add_filter( 'auto_update_plugin', array( __CLASS__, 'never_automatically' ), 10, 2 );
+		add_filter( 'plugin_auto_update_setting_html', array( __CLASS__, 'explain_no_auto_update' ), 10, 2 );
+	}
+
+	/**
+	 * Refuse to update this plugin without somebody pressing the button.
+	 *
+	 * WordPress offers an "Enable auto-updates" toggle for anything that reports update
+	 * information, and turning it on would mean a release installs itself on the next cron run
+	 * with nobody present.
+	 *
+	 * That is the one attack the pinning cannot help with. Every check in this file assumes the
+	 * danger is a *tampered answer* — a URL pointing somewhere else, a response that is not
+	 * GitHub's. None of them help if the release is genuinely published from the pinned
+	 * repository by somebody who should not have been able to publish it. A compromised
+	 * release is correctly signed, correctly hosted and correctly named, and every check here
+	 * passes it.
+	 *
+	 * What is left is the plugin's own rule, applied to the plugin itself: **a person presses
+	 * it.** The update is offered, the row says one is available, and installing it takes a
+	 * click by somebody who can look at what changed first. That turns "the release account
+	 * was compromised" from every site at once into every site whose operator pressed a button
+	 * — which is a much smaller number and a much later one.
+	 *
+	 * The toggle is not merely disabled, it is explained. A control that silently does nothing
+	 * reads as broken, and the next person to wonder why it is missing should find the reason
+	 * on the screen rather than in this comment.
+	 *
+	 * @param bool|null $update Whether WordPress intends to update it.
+	 * @param mixed     $item   The plugin being considered.
+	 * @return bool|null
+	 */
+	public static function never_automatically( $update, $item ) {
+		$file = self::basename();
+
+		if ( is_object( $item ) && isset( $item->plugin ) && $file === $item->plugin ) {
+			return false;
+		}
+
+		// Not ours. Handing back what arrived leaves every other plugin's setting alone —
+		// returning false here would quietly switch off automatic updates site-wide.
+		return $update;
+	}
+
+	/**
+	 * Say why the auto-update toggle is not there.
+	 *
+	 * @param string $html   The markup WordPress was going to print.
+	 * @param string $plugin Plugin file being rendered.
+	 * @return string
+	 */
+	public static function explain_no_auto_update( $html, $plugin ) {
+		if ( self::basename() !== $plugin ) {
+			return $html;
+		}
+
+		return '<span class="description">'
+			. esc_html__( 'Updates are installed by hand on purpose. This plugin will not update itself unattended, so a release has to be applied by somebody who can look at what changed.', 'wpaqs' )
+			. '</span>';
 	}
 
 	/**
