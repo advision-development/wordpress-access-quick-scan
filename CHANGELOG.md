@@ -3,6 +3,58 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.7.0
+
+**Updates arrive in the Plugins screen.** Neither plugin is on wordpress.org, so WordPress had
+nowhere to ask whether a newer version existed and the row showed nothing however many releases
+were published — every update meant downloading a zip and uploading it by hand. `WPAQS_Updater` tells
+WordPress where to ask: this repository's own releases.
+
+This is the most dangerous code in the plugin and is written that way. It hands WordPress a URL
+that WordPress downloads, unzips over the plugin directory and runs on the next request:
+
+- **The package URL is checked against a pinned host, owner and repository**, never taken from
+  the response. If the API answer is tampered with, or the repository moves, the answer is to
+  install nothing.
+- **A prefix check was not enough**, which a test case written to prove it was found instead.
+  HTTP clients resolve `..` out of a path before sending it, so a URL starting with the pinned
+  prefix and continuing `../../../../someone/their-repo/…` downloads from another account —
+  still `github.com`, still a 200, not this plugin. Any `..` is refused.
+- **The asset must be this plugin's own zip.** Both plugins are released from one account and
+  their names differ by a word, so a release carrying the sibling's zip must not install it.
+- **TLS verification is never turned off**, not as a fallback and not behind a filter. A plugin
+  that would rather install something than nothing is a delivery mechanism.
+- **Versions are padded to three components** before comparing. `version_compare( '1.2',
+  '1.2.0' )` reports less-than, which hides an available update; as text `0.10` sorts before
+  `0.9`, which offers a downgrade. Both look like the updater merely not working.
+- **A tag that is not a plain version is refused** rather than interpreted, so a branch or a
+  pre-release is never installed as a release.
+- **Failures are cached, not only successes.** GitHub allows 60 unauthenticated requests an
+  hour per IP and a hosting provider's sites share one, so retrying on every admin page load
+  is how one rate-limited site becomes every site on that host.
+
+**It offers the update and refuses to apply it unattended.** WordPress shows an "Enable
+auto-updates" toggle for anything reporting update information, and turning it on would mean a
+release installs itself on the next cron run with nobody present.
+
+That is the one risk none of the checks above reduce. Every one of them assumes the danger is a
+*tampered answer*. None helps if the release is genuinely published from the pinned repository by
+somebody who should not have been able to publish it: such a release is correctly hosted,
+correctly named, correctly signed, and passes every check. What is left is this project's own
+rule turned on itself — **a person presses it**. That makes a compromised release account mean
+every site whose operator pressed a button rather than every site at once.
+
+The toggle is replaced with a sentence saying why, because a control that silently does nothing
+reads as broken.
+
+`plugins_api` is filtered too, or the *View details* link beside the update opens a modal
+saying the plugin does not exist — a control that looks like it works and does not.
+
+
+The update cache is the first thing this plugin stores. `uninstall.php` said it stored nothing
+and now names it, deleted as a site transient — on multisite the plain function looks in the
+wrong place and leaves the row behind.
+
 ## 0.6.0
 
 **Show only the accounts signed in right now.** A real site's table opened on 140 rows of which

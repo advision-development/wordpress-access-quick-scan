@@ -143,6 +143,36 @@ string and nothing else.
 
 ## Lessons, most of them inherited
 
+**The updater is code delivery, and is written as if it were hostile.** It is the only place
+either plugin hands WordPress a URL to download, unzip over a plugin directory and run. The
+package URL is checked against a pinned host, owner and repository rather than taken from the
+API response, TLS verification is never relaxed, and a tag that is not a plain version is
+refused rather than interpreted.
+
+**The updater offers, and refuses to apply itself unattended.** The pinning answers a tampered
+response and nothing else. A release genuinely published from the pinned repository by somebody
+who should not have been able to publish it passes every check in the file, so the remaining
+control is the project's own rule turned on itself: a person presses it. `auto_update_plugin`
+returns false for this plugin only — returning false unconditionally would switch off automatic
+updates site-wide, which is not this plugin's business — and the toggle is replaced with the
+reason rather than removed.
+
+**A prefix check does not pin a repository.** The first version checked `strpos( $url, $prefix )`
+and parsed the host as a second check. The host check was dead — nothing passing the prefix can
+have another host, since a URL's authority ends at the first slash — and the comment justifying
+it claimed a lookalike host would slip through, which was false. Removing it failed no
+assertion. But the prefix alone was *also* insufficient, for a different reason the comment had
+not thought of: HTTP clients resolve `..` out of a path before sending, so
+`…/wordpress-x/releases/download/../../../../someone/their-repo/…` starts with the prefix and
+downloads from another account. Any `..` is refused now.
+
+Two lessons in one place: dead code justified by a false comment is worse than either alone, and
+a test case written to *confirm* a guard is sufficient is how you find out it is not.
+
+**Failures are cached, not only successes.** GitHub allows 60 unauthenticated requests an hour
+per IP and a hosting provider's sites share one, so retrying on every admin page load is how one
+rate-limited site becomes every site on that host.
+
 **Nothing builds a link to this screen by hand.** `WPAQS_Sort::url()` did — from
 `admin_url( 'tools.php?page=' . WPAQS_SLUG )` plus its own two arguments — which is correct while
 sorting is the only control and silently wrong the moment there is a second one: a column header
@@ -335,6 +365,7 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-sort.php` | The allowlist, per-table isolation, numbers not sorting like text, never-used first, stable ties, and the link reversing the active column |
 | `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |
 | `test-timeline.php` | Ordering, both window exclusions, the disclosed cap keeping the newest end, the activation-key parser, and that the class runs no query |
+| `test-updater.php` | Where an update package may come from, the traversal that defeats a prefix, tags that are not versions, both directions of the padding trap, and that the cache is named in uninstall.php |
 | `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap, grouped rendering, and that no evidence is echoed raw |
 
 When adding a rule, add both a positive case and the benign case that must **not** match. A
