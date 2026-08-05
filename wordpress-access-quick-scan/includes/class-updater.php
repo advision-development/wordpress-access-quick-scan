@@ -51,6 +51,9 @@ class WPAQS_Updater {
 	/** Where the answer is cached. */
 	const CACHE = 'wpaqs_release';
 
+	/** The endpoint that re-checks on request. */
+	const CHECK_ACTION = 'wpaqs_check_release';
+
 	/** How long a successful answer is trusted. */
 	const CACHE_TTL = 43200;
 
@@ -76,6 +79,7 @@ class WPAQS_Updater {
 		// risk the pinning cannot reduce.
 		add_filter( 'auto_update_plugin', array( __CLASS__, 'never_automatically' ), 10, 2 );
 		add_filter( 'plugin_auto_update_setting_html', array( __CLASS__, 'explain_no_auto_update' ), 10, 2 );
+		add_action( 'admin_post_' . self::CHECK_ACTION, array( __CLASS__, 'handle_check' ) );
 	}
 
 	/**
@@ -130,8 +134,13 @@ class WPAQS_Updater {
 			return $html;
 		}
 
+		// The state of the last check goes here rather than only the policy. A row showing no
+		// update cannot be told apart from a check that never ran or one that failed, and this
+		// cell is where somebody wondering is already looking.
 		return '<span class="description">'
-			. esc_html__( 'Updates are installed by hand on purpose. This plugin will not update itself unattended, so a release has to be applied by somebody who can look at what changed.', 'wpaqs' )
+			. esc_html__( 'Updates are installed by hand on purpose: this plugin will not update itself unattended.', 'wpaqs' )
+			. '<br />' . esc_html( self::status_text() )
+			. '<br /><a href="' . esc_url( self::check_url() ) . '">' . esc_html__( 'Check for a new release now', 'wpaqs' ) . '</a>'
 			. '</span>';
 	}
 
@@ -275,12 +284,13 @@ class WPAQS_Updater {
 	 *
 	 * @return array array( version, package, notes, published ) or array()
 	 */
-	public static function release() {
+	public static function release( $force = false ) {
 		$cached = get_site_transient( self::CACHE );
 
-		if ( is_array( $cached ) ) {
-			// A remembered failure is stored as an empty array, which is also what this returns
-			// on failure — so a rate-limited site stops asking rather than asking harder.
+		if ( ! $force && is_array( $cached ) ) {
+			// A remembered failure is stored with its reason, which is also what this returns
+			// nothing for — so a rate-limited site stops asking rather than asking harder, and
+			// status() can still say what went wrong.
 			return isset( $cached['version'] ) ? $cached : array();
 		}
 
@@ -301,13 +311,171 @@ class WPAQS_Updater {
 
 		$release = self::parse( $response );
 
+		if ( empty( $release ) ) {
+			// Why it failed, not merely that it did. The screen prints this: a check that
+			// silently found nothing is indistinguishable from one that never ran, which is the
+			// question somebody staring at a plugin row with no update actually has.
+			$stored = array(
+				'failed'  => true,
+				'reason'  => self::failure_reason( $response ),
+				'checked' => time(),
+			);
+		} else {
+			$stored            = $release;
+			$stored['checked'] = time();
+		}
+
 		set_site_transient(
 			self::CACHE,
-			empty( $release ) ? array( 'failed' => true ) : $release,
+			$stored,
 			empty( $release ) ? self::FAILURE_TTL : self::CACHE_TTL
 		);
 
 		return $release;
+	}
+
+	/**
+	 * Where pressing "check now" goes.
+	 *
+	 * @return string
+	 */
+	public static function check_url() {
+		return wp_nonce_url( admin_url( 'admin-post.php?action=' . self::CHECK_ACTION ), self::CHECK_ACTION );
+	}
+
+	/**
+	 * Re-check on request, then go back to where the press came from.
+	 *
+	 * Two caches sit between a published release and a row on the Plugins screen: this
+	 * plugin's, and WordPress's own `update_plugins`, which it refreshes twice a day. Clearing
+	 * only the first leaves somebody pressing a button that changes nothing they can see, so
+	 * both go.
+	 *
+	 * @return void
+	 */
+	public static function handle_check() {
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			wp_die( esc_html__( 'You do not have permission to check for plugin updates on this site.', 'wpaqs' ) );
+		}
+
+		check_admin_referer( self::CHECK_ACTION );
+
+		delete_site_transient( self::CACHE );
+		self::release( true );
+
+		// WordPress's own list, or the row keeps showing what it decided this morning.
+		delete_site_transient( 'update_plugins' );
+
+		wp_safe_redirect( admin_url( 'plugins.php' ) );
+		exit;
+	}
+
+	/**
+	 * Why a check did not produce a release.
+	 *
+	 * Named rather than guessed at. The sibling plugin's quarantine row printed one cause for
+	 * every reason a read could fail and sent somebody to look in the wrong place; the lesson
+	 * written down from that is that an operator told the truth is unknown is better off than
+	 * one told a confident wrong answer.
+	 *
+	 * @param mixed $response Result of wp_remote_get().
+	 * @return string
+	 */
+	private static function failure_reason( $response ) {
+		if ( is_wp_error( $response ) ) {
+			return __( 'the site could not reach github.com', 'wpaqs' );
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( 403 === $code || 429 === $code ) {
+			// GitHub allows 60 unauthenticated requests an hour per IP, and a hosting
+			// provider's sites share one.
+			return __( 'github.com refused the request, which on shared hosting is usually its hourly limit being reached by other sites on the same address', 'wpaqs' );
+		}
+
+		if ( 404 === $code ) {
+			return __( 'github.com has no published release to report', 'wpaqs' );
+		}
+
+		if ( 200 !== $code ) {
+			/* translators: %d: HTTP status code. */
+			return sprintf( __( 'github.com answered with status %d', 'wpaqs' ), $code );
+		}
+
+		return __( 'the answer arrived but did not name a release this plugin would install', 'wpaqs' );
+	}
+
+	/**
+	 * What the last check knows, for printing.
+	 *
+	 * Exists because a plugin row showing no update cannot be told apart from a check that
+	 * never ran, one that failed, or one that ran before the release was published. That is the
+	 * same fault as a control that silently never initialises: the screen has to say which.
+	 *
+	 * @return array array( state, version, reason, checked )
+	 */
+	public static function status() {
+		$cached = get_site_transient( self::CACHE );
+
+		if ( ! is_array( $cached ) ) {
+			return array(
+				'state'   => 'never',
+				'version' => '',
+				'reason'  => '',
+				'checked' => 0,
+			);
+		}
+
+		$checked = isset( $cached['checked'] ) ? (int) $cached['checked'] : 0;
+
+		if ( ! isset( $cached['version'] ) ) {
+			return array(
+				'state'   => 'failed',
+				'version' => '',
+				'reason'  => isset( $cached['reason'] ) ? (string) $cached['reason'] : '',
+				'checked' => $checked,
+			);
+		}
+
+		return array(
+			'state'   => self::is_newer( $cached['version'], WPAQS_VERSION ) ? 'available' : 'current',
+			'version' => (string) $cached['version'],
+			'reason'  => '',
+			'checked' => $checked,
+		);
+	}
+
+	/**
+	 * One sentence describing the last check.
+	 *
+	 * @return string
+	 */
+	public static function status_text() {
+		$status = self::status();
+
+		switch ( $status['state'] ) {
+			case 'never':
+				return __( 'This site has not checked for a new release yet.', 'wpaqs' );
+			case 'failed':
+				return sprintf(
+					/* translators: %s: why the check failed. */
+					__( 'The last check for a new release did not succeed: %s.', 'wpaqs' ),
+					$status['reason']
+				);
+			case 'available':
+				return sprintf(
+					/* translators: %s: version number. */
+					__( 'Release %s is available. WordPress shows it on the Plugins screen once it next refreshes its own update list, which it does twice a day — pressing Check again on the Updates screen does it now.', 'wpaqs' ),
+					$status['version']
+				);
+		}
+
+		return sprintf(
+			/* translators: %s: version number. */
+			__( 'Up to date. The newest release is %s.', 'wpaqs' ),
+			$status['version']
+		);
 	}
 
 	/**

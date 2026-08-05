@@ -3,6 +3,38 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.7.1
+
+**There was no way to tell whether the update check had run**, the same fault the sibling was
+reported with. A plugin row showing no update could mean the check has not run yet, the check
+failed, the check ran before the release was published, or the plugin is current. Four states,
+one appearance — which is the same fault as a control that silently never initialises.
+
+The plugin row now says which, and offers **Check for a new release now**:
+
+- **Each failure names its own cause.** Unreachable, refused, no published release, an unexpected
+  status, and an answer naming nothing installable are five different sentences, and
+  `test-updater.php` asserts no two read the same. The rate-limit wording says it is usually
+  another site on the same address, because on shared hosting it is.
+- **When a release is available the sentence explains why the row may not show it yet.**
+  WordPress decides that row from its own `update_plugins` transient, which it refreshes twice a
+  day, so "available" beside a row with no update link reads as broken when it is the wait.
+- **Check now clears both caches**, this plugin's and WordPress's own. Clearing one leaves a
+  button that changes nothing anybody can see. It takes `update_plugins` and a nonce, because it
+  makes a network request and clears site-wide state.
+
+**`test-uninstall.php`, which this plugin did not have.** It was built storing nothing — every
+screen reads live and throws the result away — and `uninstall.php` said exactly that, ending
+"the moment anything is written, its name belongs here". Then the updater wrote one, and the only
+thing between that note and being wrong was somebody remembering to read it.
+
+Names are discovered from the source rather than listed, because a hand-maintained list is what
+went stale in the sibling. The `site_` call variants are in the pattern from the start, since the
+one name this plugin stores is a site transient and would otherwise be invisible. It also asserts
+the deletion uses `delete_site_transient` rather than the plain one, that nothing outside the
+`wpaqs_` prefix is deleted, and that uninstalling touches no account, session, application
+password or role — removing the release cache, or adding a stray `delete_option`, both fail it.
+
 ## 0.7.0
 
 **Updates arrive in the Plugins screen.** Neither plugin is on wordpress.org, so WordPress had

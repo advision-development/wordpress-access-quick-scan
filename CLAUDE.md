@@ -143,6 +143,20 @@ string and nothing else.
 
 ## Lessons, most of them inherited
 
+**Four states that look identical.** A plugin row with no update could mean the check has not
+run, it failed, it ran before the release was published, or the plugin is current.
+`WPAQS_Updater::status()` names which, `status_text()` prints it, and the row offers a re-check
+that clears **both** caches — this plugin's and WordPress's own `update_plugins`, refreshed twice
+a day. Clearing one is a button that changes nothing anybody can see. Each failure names its own
+cause and the suite asserts no two read the same.
+
+**`uninstall.php` promised this plugin stored nothing, and then it stored something.** The note
+ending "the moment anything is written, its name belongs here" was the only guard, and a note is
+not a guard. `test-uninstall.php` discovers names from the source — including the `site_` call
+variants, since the one stored name is a site transient — and asserts the deletion uses
+`delete_site_transient`, that nothing outside the prefix is deleted, and that uninstalling
+touches no account, session, application password or role.
+
 **The updater is code delivery, and is written as if it were hostile.** It is the only place
 either plugin hands WordPress a URL to download, unzip over a plugin directory and run. The
 package URL is checked against a pinned host, owner and repository rather than taken from the
@@ -365,6 +379,7 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-sort.php` | The allowlist, per-table isolation, numbers not sorting like text, never-used first, stable ties, and the link reversing the active column |
 | `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |
 | `test-timeline.php` | Ordering, both window exclusions, the disclosed cap keeping the newest end, the activation-key parser, and that the class runs no query |
+| `test-uninstall.php` | That every name the source stores is named in uninstall.php, deleted as a site transient, that nothing outside the prefix is deleted, and that uninstalling touches no account or session |
 | `test-updater.php` | Where an update package may come from, the traversal that defeats a prefix, tags that are not versions, both directions of the padding trap, and that the cache is named in uninstall.php |
 | `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap, grouped rendering, and that no evidence is echoed raw |
 
