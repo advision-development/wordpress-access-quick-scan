@@ -44,6 +44,18 @@ function plugin_basename( $file ) {
 	return 'wordpress-access-quick-scan/wordpress-access-quick-scan.php';
 }
 
+function esc_url( $url ) {
+	return $url;
+}
+
+function admin_url( $path = '' ) {
+	return 'https://example.test/wp-admin/' . $path;
+}
+
+function wp_nonce_url( $url, $action ) {
+	return $url . '&_wpnonce=abc';
+}
+
 function esc_html__( $text, $domain = '' ) {
 	return $text;
 }
@@ -424,5 +436,160 @@ check(
 	'and another plugin keeps its own toggle',
 	'<toggle />' === WPAQS_Updater::explain_no_auto_update( '<toggle />', 'akismet/akismet.php' )
 );
+
+// ------------------------------------------------------------- what the last check knows
+
+// A plugin row showing no update cannot be told apart from a check that never ran, one that
+// failed, and one that ran before the release existed. That is the same fault as a control that
+// silently never initialises, so the screen has to say which.
+$GLOBALS['site_transients'] = array();
+
+$never = WPAQS_Updater::status();
+
+check( 'with no check yet the state says so', 'never' === $never['state'], $never['state'] );
+check( 'and the sentence says so too', false !== stripos( WPAQS_Updater::status_text(), 'has not checked' ) );
+
+$GLOBALS['site_transients']['wpaqs_release'] = array( 'version' => '9.9.9', 'package' => $good, 'notes' => '', 'published' => '', 'checked' => 1750000000 );
+
+$available = WPAQS_Updater::status();
+
+check( 'a newer release reports available', 'available' === $available['state'], $available['state'] );
+check( 'and names the version', '9.9.9' === $available['version'] );
+check( 'and records when it was checked', 1750000000 === $available['checked'] );
+
+// The sentence has to explain the delay, or somebody sees "0.27.1 is available" beside a row
+// with no update link and concludes the updater is broken. WordPress refreshes its own list
+// twice a day and that is the actual reason.
+check(
+	'the sentence explains why the row may not show it yet',
+	false !== stripos( WPAQS_Updater::status_text(), 'Check again' ),
+	'otherwise an available release beside a row with no update link reads as broken'
+);
+
+$GLOBALS['site_transients']['wpaqs_release']['version'] = '0.0.1';
+
+check( 'an older release reports current', 'current' === WPAQS_Updater::status()['state'] );
+check( 'and the sentence names the newest', false !== strpos( WPAQS_Updater::status_text(), '0.0.1' ) );
+
+// A failure is remembered with its reason, so the row says what went wrong rather than nothing.
+$GLOBALS['site_transients']['wpaqs_release'] = array( 'failed' => true, 'reason' => 'github.com refused the request', 'checked' => 1750000000 );
+
+$failed = WPAQS_Updater::status();
+
+check( 'a failed check reports failed', 'failed' === $failed['state'] );
+check( 'and carries the reason', 'github.com refused the request' === $failed['reason'] );
+check( 'and the sentence prints it', false !== strpos( WPAQS_Updater::status_text(), 'refused the request' ) );
+
+// A remembered failure must not read as up to date. That is the whole point: "no update
+// available" and "the check did not work" are different answers.
+check(
+	'a failed check does not read as up to date',
+	false === stripos( WPAQS_Updater::status_text(), 'Up to date' ),
+	'"no update available" and "the check did not work" are different answers'
+);
+
+// The cell somebody is already looking at carries the state and a way to re-check.
+$cell = WPAQS_Updater::explain_no_auto_update( '<toggle />', $file );
+
+check( 'the plugin row states the policy', false !== stripos( $cell, 'by hand on purpose' ) );
+check( 'and what the last check found', false !== stripos( $cell, 'did not succeed' ) );
+check( 'and offers a re-check', false !== strpos( $cell, WPAQS_Updater::CHECK_ACTION ) );
+check( 'with a nonce on it', false !== strpos( WPAQS_Updater::check_url(), '_wpnonce' ), 'it clears caches, so it is not a bare link' );
+
+// Both caches, or the press changes nothing anybody can see: WordPress decides the row off its
+// own update_plugins transient, which it refreshes twice a day.
+$source = file_get_contents( WPAQS_DIR . 'includes/class-updater.php' );
+$code   = '';
+
+foreach ( token_get_all( $source ) as $token ) {
+	if ( is_array( $token ) && in_array( $token[0], array( T_COMMENT, T_DOC_COMMENT ), true ) ) {
+		continue;
+	}
+
+	$code .= is_array( $token ) ? $token[1] : $token;
+}
+
+check(
+	're-checking clears this plugin\'s cache and WordPress\'s own',
+	false !== strpos( $code, "delete_site_transient( self::CACHE )" )
+	&& false !== strpos( $code, "delete_site_transient( 'update_plugins' )" ),
+	'clearing only one leaves a button that changes nothing anybody can see'
+);
+
+check(
+	'and it is capability-checked and nonce-checked',
+	false !== strpos( $code, "current_user_can( 'update_plugins' )" )
+	&& false !== strpos( $code, 'check_admin_referer( self::CHECK_ACTION )' ),
+	'it makes a network request and clears site-wide state'
+);
+
+// Each failure names its own cause. One cause printed for every reason a read can fail is the
+// fault the quarantine row already paid for on a real site.
+check( 'a transport failure is described as one', false !== stripos( WPAQS_Updater::status_text(), 'refused' ) );
+
+
+// ------------------------------------------------- each failure names its own cause
+
+// The sibling's quarantine row printed one cause for every reason a read could fail and sent
+// somebody to look in the wrong place on a real site. The lesson written down from that is that
+// an operator told the truth is unknown is better off than one given a confident wrong answer —
+// so these have to differ from each other.
+function wp_remote_get( $url, $args = array() ) {
+	return $GLOBALS['next_response'];
+}
+
+/**
+ * The reason a check stored for a given response.
+ *
+ * @param mixed $response What the request returns.
+ * @return string
+ */
+function reason_for( $response ) {
+	$GLOBALS['next_response']   = $response;
+	$GLOBALS['site_transients'] = array();
+
+	WPAQS_Updater::release();
+
+	$stored = $GLOBALS['site_transients']['wpaqs_release'];
+
+	return isset( $stored['reason'] ) ? $stored['reason'] : '';
+}
+
+$reasons = array(
+	'unreachable' => reason_for( new WP_Error( 'timeout' ) ),
+	'rate limit'  => reason_for( responded( array( 'message' => 'API rate limit exceeded' ), 403 ) ),
+	'no release'  => reason_for( responded( array( 'message' => 'Not Found' ), 404 ) ),
+	'server'      => reason_for( responded( '', 502 ) ),
+	'unusable'    => reason_for( responded( array( 'tag_name' => 'main' ) ) ),
+);
+
+foreach ( $reasons as $label => $reason ) {
+	check( 'a ' . $label . ' failure has a reason', '' !== $reason, $reason );
+}
+
+check(
+	'and no two of them read the same',
+	count( array_unique( array_values( $reasons ) ) ) === count( $reasons ),
+	'one cause printed for every failure is how somebody gets sent to look in the wrong place'
+);
+
+// The one somebody will actually hit: a host whose other sites used up the hourly allowance.
+check(
+	'the rate-limit reason says it may be another site on the same address',
+	false !== stripos( $reasons['rate limit'], 'same address' ),
+	'otherwise it reads as this site being blocked'
+);
+
+// A failure is remembered rather than retried on every page load, and it records when.
+check( 'a failure records when it happened', ! empty( $GLOBALS['site_transients']['wpaqs_release']['checked'] ) );
+
+// Forcing a check ignores the cache. Without this the button would clear the cache and then
+// read the value it just deleted, which happens to work — and would stop working the moment
+// anything else populated it first.
+$GLOBALS['next_response']   = responded( release_body( 'v9.9.9', array( asset( 'wordpress-access-quick-scan-9.9.9.zip', 'https://github.com/advision-development/wordpress-access-quick-scan/releases/download/v9.9.9/wordpress-access-quick-scan-9.9.9.zip' ) ) ) );
+$GLOBALS['site_transients'] = array( 'wpaqs_release' => array( 'failed' => true, 'reason' => 'stale', 'checked' => 1 ) );
+
+check( 'a normal read honours the cached failure', array() === WPAQS_Updater::release() );
+check( 'and a forced one goes past it', '9.9.9' === WPAQS_Updater::release( true )['version'] );
 
 finish();
