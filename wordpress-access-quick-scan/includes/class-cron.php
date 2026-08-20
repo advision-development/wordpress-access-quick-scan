@@ -156,5 +156,13 @@ class WPAQS_Cron {
 		}
 
 		WPAQS_Fleet::poll();
+
+		// Approved just now: report immediately rather than an hour from now. There is
+		// no scan to start here — reading live state *is* the read — so the handshake and
+		// the first report are one step. The sibling has to run a scan at this point,
+		// which is the only reason it does more than this.
+		if ( WPAQS_Fleet::enrolled() ) {
+			self::report_to_fleet_if_enrolled();
+		}
 	}
 }

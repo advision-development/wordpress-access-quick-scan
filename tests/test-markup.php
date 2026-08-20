@@ -619,5 +619,45 @@ check(
 	'a link built from scratch drops whatever else is in the address'
 );
 
+// ------------------------------------------------------------ the page's shape
+
+// The order this page renders in is a decision, not an accident of what was appended
+// last. The fleet panel had ended up between the application passwords and the coverage
+// list — one configuration card wedged between two readings of the site, which is how a
+// page ends up with no shape. Both plugins are opened by the same people on the same
+// day, so the two screens are laid out the same way on purpose.
+//
+// Read from code only. The comment explaining the order names the sections it puts in
+// order, so an assertion reading the source would pass on the comment.
+$shape = code_only( $page_code );
+$order = array();
+
+foreach ( array(
+	"render_section_heading( __( 'Settings'",
+	'render_findings(',
+	'render_accounts(',
+	'WPAQS_Fleet_Panel::render()',
+) as $needle ) {
+	$order[ $needle ] = strpos( $shape, $needle );
+}
+
+check(
+	'every section the page promises is actually rendered',
+	! in_array( false, $order, true ),
+	implode( ', ', array_keys( array_filter( $order, 'is_bool' ) ) )
+);
+
+check(
+	'the findings render above the settings',
+	$order['render_findings('] < $order["render_section_heading( __( 'Settings'"],
+	'the findings are the product; a page that renders them below configuration has been grown rather than laid out'
+);
+
+check(
+	'the fleet panel is under the settings heading, not among the results',
+	$order["render_section_heading( __( 'Settings'"] < $order['WPAQS_Fleet_Panel::render()'],
+	'it used to sit between the application passwords and the coverage list'
+);
+
 printf( "\n%d failure(s)\n", $GLOBALS['wpaqs_failures'] );
 exit( $GLOBALS['wpaqs_failures'] > 0 ? 1 : 0 );

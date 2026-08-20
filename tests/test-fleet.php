@@ -11,7 +11,7 @@
 
 define( 'ABSPATH', sys_get_temp_dir() . '/wpaqs-fleet-test/' );
 define( 'WPAQS_DIR', ABSPATH );
-define( 'WPAQS_VERSION', '0.8.4' );
+define( 'WPAQS_VERSION', '0.8.5' );
 
 $failures = 0;
 
@@ -190,7 +190,7 @@ $body = json_decode( $post['args']['body'], true );
 check( 'an enrolled site reports', false !== strpos( $post['url'], '/ingest' ) );
 check( 'and carries the run id', 'run-1' === $body['scanRunId'] );
 check( 'and the findings from the export', 1 === count( $body['findings'] ) );
-check( 'and the plugin version', '0.8.4' === $body['pluginVersion'] );
+check( 'and the plugin version', '0.8.5' === $body['pluginVersion'] );
 
 // ------------------------------------------------- what must never be in a request
 
@@ -264,6 +264,65 @@ check(
 	'nothing here relaxes TLS',
 	false === strpos( $code, 'sslverify\' => false' ) && false === strpos( $code, 'sslverify" => false' )
 );
+
+// ------------------------------------------------------- what a failed push means
+
+// pushed_at used to be written on every attempt, which made a site whose first push
+// failed indistinguishable from one that had reported. The hourly fleet check asks
+// exactly that question before deciding whether to retry, so one failed attempt meant
+// the report was never sent again — silently, and on the run that matters most.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+$GLOBALS['reply']                  = array( 'code' => 500, 'body' => array( 'error' => 'boom' ) );
+WPAQS_Fleet::push( array( 'findings' => array() ), 'run-1' );
+$state = WPAQS_Fleet::state();
+check( 'a failed push does not claim the report was sent', empty( $state['pushed_at'] ) );
+check( 'a failed push records why', ! empty( $state['last_error'] ) );
+
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+WPAQS_Fleet::push( array( 'findings' => array() ), 'run-1' );
+$state = WPAQS_Fleet::state();
+check( 'a push that worked records when', ! empty( $state['pushed_at'] ) );
+
+// ------------------------------------------------- a key the console no longer knows
+
+// 401 is the console saying it does not know this key: the site was removed from the
+// fleet, or its key was revoked. Staying enrolled would leave the site believing for
+// ever that it reports to something, while the console has forgotten it exists.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array(
+	'key'           => 'a-key',
+	'enrolled_at'   => 100,
+	'requested_at'  => 50,
+	'polled_at'     => 90,
+	'install_nonce' => 'the-install',
+);
+$GLOBALS['reply'] = array( 'code' => 401, 'body' => array( 'error' => 'unauthenticated' ) );
+WPAQS_Fleet::push( array( 'findings' => array() ), 'run-1' );
+check( 'a 401 un-enrols the site', ! WPAQS_Fleet::enrolled() );
+
+$state = WPAQS_Fleet::state();
+check( 'and clears the request, so the site asks again', empty( $state['requested_at'] ) );
+
+// Identifies the installation, not the enrolment. A fresh one would make a re-approval
+// indistinguishable from a different install at the same address.
+check( 'but keeps the install nonce', 'the-install' === $state['install_nonce'] );
+
+// Every other refusal is the console being unhappy with this particular report, and
+// throwing the key away over one of those would take the site out of the fleet for a
+// reason that has nothing to do with whether it belongs there.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+$GLOBALS['reply']                  = array( 'code' => 400, 'body' => array( 'error' => 'bad-body' ) );
+WPAQS_Fleet::push( array( 'findings' => array() ), 'run-1' );
+check( 'a 400 leaves the site enrolled', WPAQS_Fleet::enrolled() );
+
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+$GLOBALS['reply']                  = array( 'wp_error' => true );
+WPAQS_Fleet::push( array( 'findings' => array() ), 'run-1' );
+check( 'a console that cannot be reached leaves the site enrolled', WPAQS_Fleet::enrolled() );
 
 printf( "\n%d failure(s)\n", $failures );
 exit( $failures > 0 ? 1 : 0 );

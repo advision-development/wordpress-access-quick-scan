@@ -200,6 +200,27 @@ A site with no key cannot report at all, rather than posting something nobody co
 attribute, and a console that cannot be reached records the error and stops. The scan
 already did its work and the report is already on the site.
 
+**`pushed_at` means sent, not attempted, and a 401 un-enrols.** Both were faults. The
+first recorded every attempt, so a site whose push failed looked like one that had
+reported — and the fleet check asks exactly that before deciding whether to retry, so a
+single failure meant the report was never sent again. The second left a site removed from
+the console retrying a key nothing would ever accept, for ever, while believing it
+reported to something. A 401 is the console saying it does not know this key; forgetting
+it puts the site back in the approval queue, which is the only recovery that does not
+need somebody to log into the site. **The install nonce survives**, because it identifies
+the installation rather than the enrolment. Every other refusal leaves the site enrolled:
+a 400 is the console being unhappy with one report, and leaving the fleet over that is a
+removal for a reason unrelated to whether the site belongs in it.
+
+**Getting in and first reporting are one step.** A handshake that succeeds reports immediately. There is no scan
+to start — reading live state *is* the read — so the two are one step.
+
+**The screen has three groups, and the order is asserted.** What is wrong, who has access, and the settings; matching the
+sibling's, because both screens are opened by the same people on the same day. The fleet
+panel used to sit between the application passwords and the coverage list. `test-markup.php`
+reads the render block with comments stripped — the comment explaining the order names
+the sections it orders, so an assertion reading the source would pass on the comment.
+
 **`/wp-json/WPAQS/v1/verify` returns a hash of the install nonce, never the nonce.**
 That route is public and unauthenticated, and the install nonce is what collects the
 key from the console. Returning it would mean anyone able to reach a site could enrol

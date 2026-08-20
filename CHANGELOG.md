@@ -3,6 +3,43 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.5
+
+**A site that joined the fleet then sat silent until the next scheduled run.** The
+handshake collected a key and stopped. Nothing was sent until a scan happened, so a site
+approved in the console showed as never having reported for up to a day — which is
+indistinguishable from a site where the plugin was never installed, and the person who
+had just approved it had no way to tell which.
+
+A handshake that gets in now reports immediately. There is no
+scan to start — reading live state *is* the read — so the handshake and the first report
+are one step. The sibling has to run a scan at that point, which is the only reason it
+does more.
+
+**A push that failed claimed the report had been sent.** `pushed_at` was recorded on
+every attempt rather than on success, and the fleet check asks exactly that question
+before deciding whether to retry. One failed attempt meant that report was never sent
+again — silently, and on the run that matters most.
+
+**A site removed from the console kept believing it was enrolled.** Its key no longer
+works, so every push comes back 401, and nothing acted on that: the site would retry a
+key nothing will ever accept, for ever, while the console had forgotten it existed.
+A 401 now clears the enrolment so the site asks again on its next fleet check, which
+puts it back in the approval queue where a person can decide. The install nonce
+survives — it identifies the installation rather than the enrolment, and a fresh one
+would make a re-approval indistinguishable from a different install at the same address.
+
+Every other refusal leaves the site enrolled. A 400 is the console being unhappy with
+one report, and leaving the fleet over that would be a removal for a reason unrelated to
+whether the site belongs in it.
+
+**The screen has a shape now.** Three groups matching the sibling's: what is wrong, who has
+access, and the settings. The fleet panel sat between the application passwords and the
+coverage list — one configuration card wedged between two readings of the site.
+
+The section headings are not decoration: they are what stops the next section being
+appended wherever the last one ended, which is how the old order was arrived at.
+
 ## 0.8.4
 
 **A site could enrol and then silently drop out of the fleet.** Enrolment rode on the
