@@ -3,6 +3,44 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.4
+
+**A site could enrol and then silently drop out of the fleet.** Enrolment rode on the
+scan's own cron event, and `reschedule()` clears that event when somebody turns the
+daily scan off. A site with the schedule disabled would never enrol — or would stop
+reporting if it already had — and in the console that reads as a site nobody has heard
+from, which is indistinguishable from one where the plugin was never installed.
+
+Whether a site scans on a schedule and whether it belongs to a fleet are two different
+questions, and one was answering the other. Enrolment now has its own event, scheduled
+unconditionally.
+
+**It runs hourly rather than daily, and that is about waiting rather than cost.** Both
+things it does are waiting on something: a person approving, and a report a manual scan
+may have produced. Asking once a day meant a site approved five minutes after its daily
+run waited most of another day to find out — which reads as approving having not worked.
+
+**A report the console never saw is now sent.** A site enrolled after a scan had already
+run held a report nobody received, and the console showed it as never having reported.
+
+## 0.8.3
+
+**A manual scan reports too, and there is a button that does not wait for the
+schedule.** Both were gaps in 0.8.2.
+
+The push was hooked to the cron path only, so a scan somebody ran by hand finished,
+stored its report, and the console never heard about it. The reasoning copied from the
+mailer — that somebody watching a run does not need it in their inbox — does not carry:
+a console is a record, not an inbox, and leaving it stale while the site holds a fresher
+answer is two sources disagreeing, which is the thing this plugin exists to notice
+rather than cause.
+
+**The panel's result is rendered by the panel.** It redirected with a notice key the
+screen did not recognise, so pressing a button rendered nothing — and a button that
+renders nothing is indistinguishable from one that did nothing. The two plugins render
+notices differently, so a shared panel handing its result to either would have looked
+broken in exactly one of them, which is the hardest kind to notice.
+
 ## 0.8.2
 
 **A panel on the screen, and a button that does not wait for tomorrow.** Enrolment

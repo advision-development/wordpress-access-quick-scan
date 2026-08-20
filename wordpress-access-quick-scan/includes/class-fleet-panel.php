@@ -32,6 +32,7 @@ class WPAQS_Fleet_Panel {
 
 		add_action( 'admin_post_' . $prefix . '_fleet_enrol', array( __CLASS__, 'handle_enrol' ) );
 		add_action( 'admin_post_' . $prefix . '_fleet_poll', array( __CLASS__, 'handle_poll' ) );
+		add_action( 'admin_post_' . $prefix . '_fleet_send', array( __CLASS__, 'handle_send' ) );
 	}
 
 	/**
@@ -94,6 +95,32 @@ class WPAQS_Fleet_Panel {
 	}
 
 	/**
+	 * Send a report now, without waiting for the schedule.
+	 *
+	 * Calls the cron class's own method rather than assembling anything: each plugin
+	 * reports a different thing — one a finished scan, the other a live read — and the
+	 * shared panel must not know which it is in.
+	 *
+	 * @return void
+	 */
+	public static function handle_send() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do that.', 'wpaqs' ), '', array( 'response' => 403 ) );
+		}
+
+		check_admin_referer( self::prefix() . '-fleet-send' );
+
+		call_user_func( array( strtoupper( self::prefix() ) . '_Cron', 'report_to_fleet_if_enrolled' ) );
+
+		$state = call_user_func( array( self::fleet(), 'state' ) );
+
+		self::back(
+			empty( $state['last_error'] ) ? 'fleet-sent' : 'fleet-failed',
+			isset( $state['last_error'] ) ? (string) $state['last_error'] : ''
+		);
+	}
+
+	/**
 	 * Back to the report with a notice.
 	 *
 	 * @param string $notice Notice key.
@@ -134,6 +161,12 @@ class WPAQS_Fleet_Panel {
 		echo '<div class="wpaqs-card" id="' . esc_attr( $prefix ) . '-fleet">';
 		echo '<h2>' . esc_html__( 'Fleet console', 'wpaqs' ) . '</h2>';
 
+		// Rendered here rather than handed to the screen's own notice system: the two
+		// plugins render notices differently, and a shared panel whose result appeared
+		// in one and vanished in the other would be a button that looks broken in
+		// exactly one place — the hardest kind to notice.
+		self::notice();
+
 		if ( $key ) {
 			echo '<p>' . esc_html__( 'This site is enrolled and reports after every scheduled scan.', 'wpaqs' ) . '</p>';
 
@@ -151,8 +184,10 @@ class WPAQS_Fleet_Panel {
 			} else {
 				// Enrolled and never having reported is its own state: the next scan will
 				// send, and saying nothing here would read as a failure.
-				echo '<p>' . esc_html__( 'Nothing has been sent yet. The next scheduled scan will report.', 'wpaqs' ) . '</p>';
+				echo '<p>' . esc_html__( 'Nothing has been sent yet. The next scheduled run will report, or send one now.', 'wpaqs' ) . '</p>';
 			}
+
+			self::button( $prefix . '_fleet_send', $prefix . '-fleet-send', __( 'Send a report now', 'wpaqs' ) );
 		} elseif ( empty( $state['requested_at'] ) ) {
 			echo '<p>' . esc_html__( 'This site has not asked to join a fleet console. Asking does not send anything about the site — somebody has to approve it there first, and only then is this site contacted.', 'wpaqs' ) . '</p>';
 			self::button( $prefix . '_fleet_enrol', $prefix . '-fleet-enrol', __( 'Ask to enrol', 'wpaqs' ) );
@@ -177,6 +212,45 @@ class WPAQS_Fleet_Panel {
 		}
 
 		echo '</div>';
+	}
+
+	/**
+	 * What just happened, if anything did.
+	 *
+	 * Read from the query string this class put there. A key the screen does not
+	 * recognise renders nothing, and a button that renders nothing is indistinguishable
+	 * from one that did nothing — which is the fault this plugin exists to report, not
+	 * to commit.
+	 *
+	 * @return void
+	 */
+	private static function notice() {
+		$prefix = self::prefix();
+		$key    = isset( $_GET[ $prefix . '-notice' ] ) ? sanitize_key( wp_unslash( $_GET[ $prefix . '-notice' ] ) ) : '';
+
+		if ( 0 !== strpos( $key, 'fleet-' ) ) {
+			return;
+		}
+
+		$why = isset( $_GET[ $prefix . '-why' ] ) ? sanitize_text_field( rawurldecode( wp_unslash( $_GET[ $prefix . '-why' ] ) ) ) : '';
+
+		$messages = array(
+			'fleet-asked'   => __( 'Asked to enrol. Nothing about this site has been sent — somebody has to approve it in the console, and only then is this site contacted.', 'wpaqs' ),
+			'fleet-checked' => __( 'Asked the console. If it had been approved, the key is now stored and this panel says so.', 'wpaqs' ),
+			'fleet-sent'    => __( 'Report sent.', 'wpaqs' ),
+			'fleet-failed'  => __( 'That did not work.', 'wpaqs' ),
+		);
+
+		if ( ! isset( $messages[ $key ] ) ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-%s inline"><p>%s%s</p></div>',
+			'fleet-failed' === $key ? 'error' : 'success',
+			esc_html( $messages[ $key ] ),
+			'' === $why ? '' : ' ' . esc_html( $why )
+		);
 	}
 
 	/**
