@@ -3,6 +3,43 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.0
+
+**Nothing here changes what the plugin does**, and unlike the sibling not one visible
+string moved either. It is recorded because the next version is where that stops being
+true.
+
+All six corrective actions moved out of the endpoint into `WPAQS_Actions`, and
+`WPAQS_Controller` became a translator: capability, nonce, parse, delegate, redirect.
+It performs nothing now, and the tests fail if it starts to.
+
+The reason is the fleet console being built alongside this: a later version runs these
+same actions from a signed remote command, with no logged-in user and no nonce. A
+refusal that lived in the HTTP handler would apply to the button and not to that
+caller.
+
+**The guards that read the session break in opposite directions under cron.**
+`get_current_user_id()` is 0 there and `current_user_can()` is false for everything, so
+`self` compares against user 0 and silently stops applying, while `nocap` becomes true
+for every target and would refuse a command outright — the more dangerous of the two,
+because it looks like a working control. Both now take the acting user, required with
+no default.
+
+**One of the two places was not the endpoint.**
+`WPAQS_Accounts::remove_direct_capability()` carried its own copy of both guards, which
+auditing the six endpoints would have missed. The sibling had already found the same
+shape in a collaborating class and said to look there.
+
+`revoke_password` still checks live state rather than anything stored, which is this
+plugin's advantage over the sibling: a password that is not on the account right now is
+not something to act on. That check moved with the action rather than being left behind.
+
+623 assertions, up from 554. Among them, two that fail if the controller ever performs
+an action itself or stops delegating one. They were written after the harness's exit
+call the first time and never ran — passing green while proving nothing, which is this
+file's own lesson about assertions met while writing the assertions meant to prevent
+it. Mutation found it.
+
 ## 0.7.1
 
 **There was no way to tell whether the update check had run**, the same fault the sibling was
