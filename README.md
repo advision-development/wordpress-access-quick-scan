@@ -73,8 +73,10 @@ Stated on the screen too, because "nothing found" is not the same as "nothing th
 
 - **Failed logins.** WordPress core records none. There is no data to read.
 - **Login history.** Only sessions still open. An expired or ended session leaves nothing.
-- **Whether an address is suspicious.** Addresses are shown so you can recognise them. The
-  plugin makes no network requests and holds no opinion about any of them.
+- **Whether an address is suspicious.** Addresses are shown so you can recognise them.
+  This plugin holds no opinion about any of them and asks nothing about them. It does
+  make network requests — to the update check, and, once enrolled, to the fleet console
+  it reports to — but never about an address it found.
 - **Files, core, and hardening settings.** A different question and a different plugin.
 
 ## Only what is active
@@ -134,11 +136,27 @@ destroys the account's posts, and those posts are the record of what it did.
 ./tests/run.sh
 ```
 
-623 assertions across twelve harnesses, no WordPress install needed — the functions it touches are stubbed in
+665 assertions across fourteen harnesses, no WordPress install needed — the functions it touches are stubbed in
 `tests/wp-stubs.php`.
 
 Every rule ships with the benign case that must stay silent. A rule without a
 false-positive test is not finished.
+
+## Reporting to a fleet console
+
+Optional, and off until somebody turns it on. A site can be enrolled with a central
+console that reads every site in one screen — built for a fleet where opening each
+site's own screen is not a workflow anybody performs.
+
+Enrolment is a request, not an action: the site asks, and **a person approves it in the
+console**. Only then is the site contacted, at
+`/wp-json/wpaqs/v1/verify`, which answers with a hash of this install's nonce — never
+the nonce, because that route is public and the nonce is what collects the key.
+
+Once enrolled, the daily run posts the same report the download button produces. The
+key travels in a header and never in a URL, TLS verification is never relaxed, and
+redirects are never followed. A site with no key cannot report at all, and a console
+that cannot be reached leaves the report where it is.
 
 ## Known limitations
 

@@ -70,29 +70,14 @@ class WPAQS_Admin_Page {
 			return;
 		}
 
-		$accounts = WPAQS_Accounts::all();
-		$findings = WPAQS_Accounts::findings( $accounts );
-		$findings = array_merge( $findings, WPAQS_Registration::findings() );
-
-		$sessions  = array();
-		$passwords = array();
-
-		foreach ( $accounts['rows'] as $row ) {
-			$sessions[ $row['id'] ]  = WPAQS_Sessions::for_user( $row['id'] );
-			$passwords[ $row['id'] ] = WPAQS_App_Passwords::for_user( $row['id'] );
-
-			$findings = array_merge( $findings, WPAQS_Sessions::findings( $row, $sessions[ $row['id'] ] ) );
-			$findings = array_merge(
-				$findings,
-				WPAQS_App_Passwords::findings(
-					$row,
-					$passwords[ $row['id'] ],
-					WPAQS_Sessions::addresses( $sessions[ $row['id'] ] )
-				)
-			);
-		}
-
-		$findings = WPAQS_Findings::sorted( $findings );
+		// Assembled by WPAQS_Report so the console reads the same answer by the same
+		// route. Two routes to one question is how a finding shown here stops matching
+		// the finding shown there.
+		$gathered  = WPAQS_Report::gather();
+		$accounts  = $gathered['accounts'];
+		$sessions  = $gathered['sessions'];
+		$passwords = $gathered['passwords'];
+		$findings  = $gathered['findings'];
 		?>
 		<div class="wrap wpaqs">
 			<h1>

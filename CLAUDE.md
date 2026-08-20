@@ -181,6 +181,43 @@ passes against a class that ignores it. The forcing assertion has to be behaviou
 writing the two above: they passed green without executing. Mutating the thing an
 assertion forbids, and watching it fail, is the only way to know it is one.
 
+**The fleet transport carries a report; it never decides anything.** `WPAQS_Fleet`
+enrols, asks whether that was approved, and posts a report that was already produced.
+Nothing it receives is executed and nothing it sends is a conclusion — the console
+derives state, counts and severity from the findings itself, because the site most
+motivated to report all-clear is the compromised one.
+
+Three properties are pinned by `test-fleet.php` and must not be traded for
+convenience:
+
+- **The key never reaches a URL.** A key in a query string survives in every access
+  log between here and the console.
+- **TLS verification is never relaxed.** The updater's reasoning applies: this is the
+  second place the plugin hands its data to a server the site does not control.
+- **Redirects are never followed.**
+
+A site with no key cannot report at all, rather than posting something nobody could
+attribute, and a console that cannot be reached records the error and stops. The scan
+already did its work and the report is already on the site.
+
+**`/wp-json/WPAQS/v1/verify` returns a hash of the install nonce, never the nonce.**
+That route is public and unauthenticated, and the install nonce is what collects the
+key from the console. Returning it would mean anyone able to reach a site could enrol
+as that site and take its key. The console stores the hash and compares hashes.
+
+**Shared files derive every name they use.** `class-fleet.php` and
+`class-fleet-verify.php` are copied verbatim into the sibling, so they reach the report
+class and the version constant through a prefix taken from their own class name. A
+hardcoded reference survives the copy pointing at the wrong plugin, which is worse than
+not compiling.
+
+**And that rule is a test now, not a note.** `test-shared.php` compares hashes with the
+prefix and the plugin directory normalised away; both plugins carry the same list, so a
+shared file changed in one repository fails *that* repository's build. It matters that
+the normalisation strips the **bare** prefix rather than the underscored one:
+`@package WPAQS` carries no underscore and survived the first copy naming the wrong
+plugin — consistently wrong in both, which is exactly the drift a hash cannot see.
+
 ## Lessons, most of them inherited
 
 **Four states that look identical.** A plugin row with no update could mean the check has not
@@ -414,6 +451,8 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-sessions.php` | Scripted-versus-browser classification both ways, malformed session meta reported rather than skipped |
 | `test-app-passwords.php` | Unused, foreign address, no recorded address, and a password used from a live session's own IP |
 | `test-registration.php` | The combination fires; each half alone does not; `'0'` is not truthy |
+| `test-fleet.php` | What the transport puts in a request and what it must never put there |
+| `test-shared.php` | That the files copied from the sibling have not drifted |
 | `test-actions.php` | What each extracted action refuses and what it reports, called with no request around it — plus the self refusal, the multisite capability, nonce scoping, live existence, that nothing calls a user delete, and the two assertions that stop the controller growing a second path |
 | `test-filter.php` | The view allowlist, the hidden count, that an empty result still reports the view, and that sorting and filtering preserve each other's arguments while carrying nothing else from the request |
 | `test-sort.php` | The allowlist, per-table isolation, numbers not sorting like text, never-used first, stable ties, and the link reversing the active column |
