@@ -92,14 +92,31 @@ class WPAQS_Admin_Page {
 				<?php esc_html_e( 'Who has access to this site right now, read live from the database every time you open this screen. It does not look at files or WordPress core — that is what Malware Quick Scan is for.', 'wpaqs' ); ?>
 			</p>
 
+			<?php
+			/*
+			 * Three groups, matching the sibling's, in the order somebody reads them:
+			 * what is wrong, what is here, and the settings.
+			 *
+			 * The fleet panel used to sit between the application passwords and the
+			 * coverage list — one configuration card wedged between two readings of the
+			 * site, which is how a page ends up with no shape. Both plugins are opened
+			 * by the same people on the same day, so the two screens are laid out the
+			 * same way on purpose.
+			 */
+			?>
+
 			<?php self::render_notice(); ?>
 			<?php self::render_findings( $findings ); ?>
+
+			<?php self::render_section_heading( __( 'Who has access', 'wpaqs' ) ); ?>
 			<?php self::render_timeline( WPAQS_Timeline::build( $accounts, $sessions, $passwords ) ); ?>
 			<?php self::render_code_holders( $accounts ); ?>
 			<?php self::render_accounts( $accounts, $sessions ); ?>
 			<?php self::render_passwords( $accounts, $passwords ); ?>
-			<?php WPAQS_Fleet_Panel::render(); ?>
 			<?php self::render_coverage(); ?>
+
+			<?php self::render_section_heading( __( 'Settings', 'wpaqs' ) ); ?>
+			<?php WPAQS_Fleet_Panel::render(); ?>
 		</div>
 		<?php
 	}
@@ -113,6 +130,21 @@ class WPAQS_Admin_Page {
 	 *
 	 * @return void
 	 */
+	/**
+	 * A heading that separates one group of cards from the next.
+	 *
+	 * Rendered unconditionally, including when every card under it is empty. A heading
+	 * that appeared and disappeared with its contents would move the page's shape around
+	 * depending on what the site happened to hold, and "the section is gone" and "the
+	 * section found nothing" are the two things this plugin exists to keep apart.
+	 *
+	 * @param string $title Group name.
+	 * @return void
+	 */
+	private static function render_section_heading( $title ) {
+		echo '<h2 class="wpaqs-group">' . esc_html( $title ) . '</h2>';
+	}
+
 	private static function render_notice() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display only.
 		$notice = isset( $_GET['wpaqs-notice'] ) ? sanitize_key( wp_unslash( $_GET['wpaqs-notice'] ) ) : '';

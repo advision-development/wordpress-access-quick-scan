@@ -76,6 +76,26 @@ class WPAQS_Fleet {
 	}
 
 	/**
+	 * Drop everything that says this site belongs to a fleet.
+	 *
+	 * The install nonce survives on purpose. It identifies this installation rather than
+	 * this enrolment, and keeping it is what lets the console verify the site is the same
+	 * one when it asks again — a fresh nonce would make a re-approval indistinguishable
+	 * from a different install at the same address.
+	 *
+	 * @return void
+	 */
+	public static function forget() {
+		$state = self::state();
+
+		foreach ( array( 'key', 'enrolled_at', 'requested_at', 'polled_at', 'pushed_at' ) as $gone ) {
+			unset( $state[ $gone ] );
+		}
+
+		update_option( self::OPTION, $state, false );
+	}
+
+	/**
 	 * Merge into the stored state.
 	 *
 	 * @param array $changes Keys to set.
@@ -239,12 +259,27 @@ class WPAQS_Fleet {
 			true
 		);
 
-		self::remember(
-			array(
-				'pushed_at'  => time(),
-				'last_error' => $response['error'],
-			)
-		);
+		$changes = array( 'last_error' => $response['error'] );
+
+		// Only on success. It used to record every attempt, which made a site whose
+		// first push failed look like a site that had reported — and the fleet check
+		// asks exactly that question before deciding whether to retry, so one failed
+		// attempt meant the report was never sent again.
+		if ( '' === $response['error'] ) {
+			$changes['pushed_at'] = time();
+		}
+
+		self::remember( $changes );
+
+		// 401 is the console saying it does not know this key: the site was removed from
+		// the fleet, or its key was revoked. Retrying is pointless and staying enrolled
+		// is a lie — this site would sit for ever believing it reports to something.
+		// Forgetting puts it back in the console's approval queue, where a person can
+		// decide again, which is the only recovery that does not need somebody to log
+		// into the site.
+		if ( isset( $response['code'] ) && 401 === (int) $response['code'] ) {
+			self::forget();
+		}
 
 		return array( 'error' => $response['error'] );
 	}
@@ -279,7 +314,7 @@ class WPAQS_Fleet {
 		$response = wp_remote_post( self::endpoint() . $path, $args );
 
 		if ( is_wp_error( $response ) ) {
-			return array( 'error' => $response->get_error_message(), 'body' => array() );
+			return array( 'error' => $response->get_error_message(), 'body' => array(), 'code' => 0 );
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
@@ -293,10 +328,11 @@ class WPAQS_Fleet {
 				/* translators: %s: the reason the console gave. */
 				'error' => sprintf( __( 'The fleet console refused this: %s', 'wpaqs' ), $reason ),
 				'body'  => $body,
+				'code'  => $code,
 			);
 		}
 
-		return array( 'error' => '', 'body' => $body );
+		return array( 'error' => '', 'body' => $body, 'code' => $code );
 	}
 
 	/**
