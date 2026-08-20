@@ -1,6 +1,6 @@
 # Handoff — not started yet
 
-**Last worked:** 2026-08-19 — read only. **No code in this repo has changed.**
+**Last worked:** 2026-08-20 — read only. **No code in this repo has changed.**
 **This repo's part:** phase 2b, then phases 3–6 alongside the sibling.
 
 ## Where this fits
@@ -12,7 +12,7 @@ and eventually run corrective actions remotely.
 
 **Spec:** `../hawkeye/docs/superpowers/specs/2026-08-19-wp-fleet-security-console-design.md`
 **Phase 1 (done):** `../hawkeye/HANDOFF.md`
-**Phase 2 (in progress, sibling):** `../wordpress-malware-quick-scan/HANDOFF.md`
+**Phase 2 (done, sibling):** `../wordpress-malware-quick-scan/HANDOFF.md`
 
 Read the sibling's handoff before starting here. This plugin gets the same treatment
 and goes **second on purpose**: it has six actions rather than ten, they are shorter,
@@ -27,7 +27,10 @@ easier half and benefits from a pattern already proven.
 
 ### Phase 2b — the action logic extraction
 
-Mirror of what the sibling is doing. Its plan is the template:
+Mirror of what the sibling **has now finished**. Read its `WPMQS_Actions` and its
+`tests/test-actions.php` rather than only the plan — the pattern is settled and the
+plan is one revision behind it in two places, noted below. The plan is still the
+template for the reasoning:
 `../wordpress-malware-quick-scan/docs/superpowers/plans/2026-08-19-action-logic-extraction.md`
 
 `WPAQS_Controller` (`includes/class-controller.php`) registers six actions:
@@ -41,6 +44,20 @@ Each becomes a method on a new `WPAQS_Actions`, returning the sibling's result
 contract — `ok`, `changed`, `code`, `message`, `data`. The controller keeps
 capability, nonce and request parsing, then delegates and translates. **The web path
 must behave identically.**
+
+**Three things the sibling learned that apply directly here:**
+
+- **Group by the helper, not by the action.** The sibling's plan split actions in a way
+  that would have left a report-membership helper copied across a commit boundary. Look
+  at which of the six share a private helper and move those together.
+- **The actor problem is wider than an audit of the handlers finds.** In the sibling it
+  turned out three more places read the session than the plan named, two of them inside
+  a collaborating class rather than in the controller. Grep for `current_user_can` and
+  `get_current_user_id` in everything an action touches, not just in the controller.
+- **Lock the pattern in the same branch.** The sibling's last commit makes
+  `test-actions.php` fail if the controller performs an action itself, and fail if an
+  endpoint stops delegating. Both were checked by mutation. Without that pair the
+  refactor is a convention, and the next person to add an action will not know it.
 
 Two things already known about this half:
 
