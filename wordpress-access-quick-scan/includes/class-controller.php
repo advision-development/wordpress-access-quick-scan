@@ -56,25 +56,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-end-session-' . $user_id . '-' . $verifier );
 
-		// The self refusal does not apply here the way it does to ending every session: an
-		// administrator with one browser session and one opened by a script should be able to
-		// close the script's without signing themselves out. What protects them is that the
-		// session is named rather than the account.
-		if ( ! get_userdata( $user_id ) ) {
-			self::redirect( 'sessions-refused', self::refusal_text( 'missing' ) );
-		}
+		$result = WPAQS_Actions::end_session( $user_id, $verifier, get_current_user_id() );
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
-			self::redirect( 'sessions-refused', self::refusal_text( 'nocap' ) );
-		}
-
-		$result = WPAQS_Sessions::end_one( $user_id, $verifier );
-
-		if ( '' === $result['error'] ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'session-ended' );
 		}
 
-		self::redirect( 'sessions-refused', $result['error'] );
+		self::redirect( 'sessions-refused', $result['message'] );
 	}
 
 	/**
@@ -238,19 +226,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-end-sessions-' . $user_id );
 
-		$refusal = self::session_refusal( $user_id, get_current_user_id() );
+		$result = WPAQS_Actions::end_sessions( $user_id, get_current_user_id() );
 
-		if ( '' !== $refusal ) {
-			self::redirect( 'sessions-refused', self::refusal_text( $refusal ) );
+		if ( ! $result['ok'] ) {
+			self::redirect( 'sessions-refused', $result['message'] );
 		}
 
-		$count = count( WPAQS_Sessions::for_user( $user_id ) );
-
-		if ( class_exists( 'WP_Session_Tokens' ) ) {
-			WP_Session_Tokens::get_instance( $user_id )->destroy_all();
-		}
-
-		self::redirect( 'sessions-ended', '', array( 'wpaqs-count' => $count ) );
+		self::redirect( 'sessions-ended', '', array( 'wpaqs-count' => (int) $result['data']['count'] ) );
 	}
 
 	/**

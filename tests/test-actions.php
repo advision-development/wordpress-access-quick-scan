@@ -34,7 +34,48 @@ function is_multisite() {
 
 require __DIR__ . '/bootstrap.php';
 
+/**
+ * Sessions, recorded rather than performed.
+ */
+class WPAQS_Sessions {
+	public static function for_user( $user_id ) {
+		return isset( $GLOBALS['sessions'][ (int) $user_id ] ) ? $GLOBALS['sessions'][ (int) $user_id ] : array();
+	}
+
+	public static function end_one( $user_id, $verifier ) {
+		if ( ! empty( $GLOBALS['end_one_error'] ) ) {
+			return array( 'error' => $GLOBALS['end_one_error'] );
+		}
+
+		$GLOBALS['ended_one'][] = $user_id . ':' . $verifier;
+
+		return array( 'error' => '' );
+	}
+}
+
+class WP_Session_Tokens {
+	private $user_id;
+
+	private function __construct( $user_id ) {
+		$this->user_id = $user_id;
+	}
+
+	public static function get_instance( $user_id ) {
+		return new self( $user_id );
+	}
+
+	public function destroy_all() {
+		$GLOBALS['destroyed'][] = $this->user_id;
+	}
+}
+
 load_class( 'controller' );
+load_class( 'actions' );
+
+$GLOBALS['sessions']      = array();
+$GLOBALS['destroyed']     = array();
+$GLOBALS['ended_one']     = array();
+$GLOBALS['end_one_error'] = '';
 
 $GLOBALS['users'] = array(
 	1 => (object) array( 'ID' => 1, 'user_login' => 'owner' ),
@@ -112,6 +153,72 @@ check(
 
 acting( 1, array( 'manage_options' => true, 'manage_network_users' => true ), true );
 check( 'with the network capability they may', WPAQS_Controller::user_can_act() );
+
+// ------------------------------------------------------------- ending sessions
+
+acting( 1, array( 'manage_options' => true, 'edit_user' => true ) );
+$GLOBALS['sessions'] = array( 7 => array( 'a', 'b', 'c' ) );
+$GLOBALS['destroyed'] = array();
+
+$r = WPAQS_Actions::end_sessions( 7, 1 );
+check( 'an account\'s sessions are ended', true === $r['ok'] && 'sessions-ended' === $r['code'], $r['code'] );
+check( 'and the tokens were destroyed', array( 7 ) === $GLOBALS['destroyed'] );
+check( 'and the count comes back', 3 === $r['data']['count'] );
+check( 'and the message says passwords still work', false !== stripos( $r['message'], 'Application passwords are unaffected' ) );
+
+// Not a failure. The answer to "is anybody in there" is no — but the site did not
+// change, and one boolean cannot say both.
+$GLOBALS['sessions'] = array( 7 => array() );
+$GLOBALS['destroyed'] = array();
+$r = WPAQS_Actions::end_sessions( 7, 1 );
+check( 'an account with no sessions still succeeds', true === $r['ok'], $r['code'] );
+check( 'but reports the site unchanged', false === $r['changed'] );
+
+$r = WPAQS_Actions::end_sessions( 1, 1 );
+check( 'your own account is refused', 'self' === $r['code'], $r['code'] );
+
+$r = WPAQS_Actions::end_sessions( 404, 1 );
+check( 'an account that does not exist is refused', 'missing' === $r['code'], $r['code'] );
+
+// A command has no screen to be signed out of.
+$GLOBALS['sessions'] = array( 1 => array( 'a' ) );
+$r = WPAQS_Actions::end_sessions( 1, 0 );
+check( 'a caller with no user has no self to protect', true === $r['ok'], $r['code'] );
+
+// -------------------------------------------------------- ending one session
+
+acting( 1, array( 'manage_options' => true, 'edit_user' => true ) );
+$GLOBALS['ended_one'] = array();
+
+$r = WPAQS_Actions::end_session( 7, 'v123', 1 );
+check( 'one session is ended', true === $r['ok'] && 'session-ended' === $r['code'], $r['code'] );
+check( 'and it named the session, not the account', array( '7:v123' ) === $GLOBALS['ended_one'] );
+check( 'and the message says the others are open', false !== stripos( $r['message'], 'still open' ) );
+
+// Deliberately no self refusal: an administrator with a browser session and one opened
+// by a script should be able to close the script's without signing themselves out.
+$GLOBALS['ended_one'] = array();
+$r = WPAQS_Actions::end_session( 1, 'v999', 1 );
+check( 'ending one of your own sessions is allowed', true === $r['ok'], $r['code'] );
+
+$r = WPAQS_Actions::end_session( 404, 'v1', 1 );
+check( 'an account that does not exist is refused', 'missing' === $r['code'], $r['code'] );
+
+acting( 1, array( 'manage_options' => true ) );
+$r = WPAQS_Actions::end_session( 7, 'v1', 1 );
+check( 'an actor that cannot edit the account is refused', 'nocap' === $r['code'], $r['code'] );
+
+// The mirror-image failure: through current_user_can() under cron this is false for
+// everything and no command would ever close a session.
+$r = WPAQS_Actions::end_session( 7, 'v1', 0 );
+check( 'a caller with no user is not refused for capabilities', 'nocap' !== $r['code'], $r['code'] );
+
+acting( 1, array( 'manage_options' => true, 'edit_user' => true ) );
+$GLOBALS['end_one_error'] = 'the default session manager is not in use';
+$r = WPAQS_Actions::end_session( 7, 'v1', 1 );
+check( 'a session manager that cannot be written is reported', 'session-refused' === $r['code'], $r['code'] );
+check( 'and passes the reason through', false !== stripos( $r['message'], 'default session manager' ) );
+$GLOBALS['end_one_error'] = '';
 
 // ------------------------------------------------------------ nothing deletes a user
 
