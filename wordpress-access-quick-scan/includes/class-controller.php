@@ -80,13 +80,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-remove-cap-' . $user_id . '-' . $cap );
 
-		$result = WPAQS_Accounts::remove_direct_capability( $user_id, $cap, get_current_user_id() );
+		$result = WPAQS_Actions::remove_capability( $user_id, $cap, get_current_user_id() );
 
-		if ( '' === $result['error'] ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'capability-removed', '', array( 'wpaqs-cap' => $cap ) );
 		}
 
-		self::redirect( 'capability-refused', $result['error'] );
+		self::redirect( 'capability-refused', $result['message'] );
 	}
 
 	/**
@@ -101,13 +101,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-park-default-role' );
 
-		$result = WPAQS_Registration::park_default_role();
+		$result = WPAQS_Actions::park_default_role( get_current_user_id() );
 
-		if ( '' === $result['error'] ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'default-role-parked' );
 		}
 
-		self::redirect( 'registration-refused', $result['error'] );
+		self::redirect( 'registration-refused', $result['message'] );
 	}
 
 	/**
@@ -122,13 +122,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-close-registration' );
 
-		$result = WPAQS_Registration::close();
+		$result = WPAQS_Actions::close_registration( get_current_user_id() );
 
-		if ( '' === $result['error'] ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'registration-closed' );
 		}
 
-		self::redirect( 'registration-refused', $result['error'] );
+		self::redirect( 'registration-refused', $result['message'] );
 	}
 
 	/**
@@ -255,28 +255,23 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-revoke-' . $user_id . '-' . $uuid );
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
-			wp_die( esc_html__( 'This site does not let you edit that account.', 'wpaqs' ), '', array( 'response' => 403 ) );
+		$result = WPAQS_Actions::revoke_password( $user_id, $uuid, get_current_user_id() );
+
+		// Neither could come from the screen: it only draws the button for a password
+		// that is on the account, and never for one this WordPress cannot hold.
+		if ( 'nocap' === $result['code'] ) {
+			wp_die( esc_html( $result['message'] ), '', array( 'response' => 403 ) );
 		}
 
-		if ( ! WPAQS_App_Passwords::available() ) {
-			wp_die( esc_html__( 'This WordPress version does not support application passwords.', 'wpaqs' ), '', array( 'response' => 400 ) );
+		if ( 'unsupported' === $result['code'] ) {
+			wp_die( esc_html( $result['message'] ), '', array( 'response' => 400 ) );
 		}
 
-		// Checked live. Nothing is trusted from the request beyond the pair being named,
-		// and a pair that is not on the account right now is not something to act on.
-		if ( ! WPAQS_App_Passwords::exists( $user_id, $uuid ) ) {
-			self::redirect( 'revoke-refused', __( 'That application password is not on that account any more, so nothing was revoked. Reload the screen to see the current list.', 'wpaqs' ) );
-		}
-
-		$result  = WP_Application_Passwords::delete_application_password( $user_id, $uuid );
-		$revoked = ( true === $result || ( ! is_wp_error( $result ) && $result ) );
-
-		if ( $revoked ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'revoked' );
 		}
 
-		self::redirect( 'revoke-refused', __( 'WordPress refused to delete that application password, and nothing was changed.', 'wpaqs' ) );
+		self::redirect( 'revoke-refused', $result['message'] );
 	}
 
 	/**

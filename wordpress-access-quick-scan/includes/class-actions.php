@@ -117,6 +117,161 @@ class WPAQS_Actions {
 	}
 
 	/**
+	 * Revoke one application password.
+	 *
+	 * Not reversible: the secret is deleted rather than hidden. It ships anyway because
+	 * revoking is what actually stops REST authentication, and the cost of a mistake is
+	 * an integration that stops working until somebody issues a new password — not lost
+	 * data. Browser sessions are unaffected, which the confirmation says: an operator
+	 * who thinks one covers the other leaves a way in open.
+	 *
+	 * @param int    $user_id The account holding it.
+	 * @param string $uuid    The password's uuid.
+	 * @param int    $actor   The user asking, or 0 when nobody is.
+	 * @return array The result contract.
+	 */
+	public static function revoke_password( $user_id, $uuid, $actor ) {
+		$user_id = (int) $user_id;
+		$uuid    = (string) $uuid;
+		$actor   = (int) $actor;
+
+		// Asked of the actor. Read through current_user_can() this is false for
+		// everything under cron and no command would ever revoke anything.
+		if ( 0 !== $actor && ! user_can( $actor, 'edit_user', $user_id ) ) {
+			return self::result( false, false, 'nocap', WPAQS_Controller::refusal_text( 'nocap' ) );
+		}
+
+		if ( ! WPAQS_App_Passwords::available() ) {
+			return self::result(
+				false,
+				false,
+				'unsupported',
+				__( 'This WordPress version does not support application passwords.', 'wpaqs' )
+			);
+		}
+
+		// Checked live. Nothing is trusted beyond the pair being named, and a pair that
+		// is not on the account right now is not something to act on. This plugin has no
+		// stored report to check against, which is the stronger arrangement.
+		if ( ! WPAQS_App_Passwords::exists( $user_id, $uuid ) ) {
+			return self::result(
+				false,
+				false,
+				'gone',
+				__( 'That application password is not on that account any more, so nothing was revoked. Reload the screen to see the current list.', 'wpaqs' )
+			);
+		}
+
+		$result  = WP_Application_Passwords::delete_application_password( $user_id, $uuid );
+		$revoked = ( true === $result || ( ! is_wp_error( $result ) && $result ) );
+
+		if ( ! $revoked ) {
+			return self::result(
+				false,
+				false,
+				'revoke-failed',
+				__( 'WordPress refused to delete that application password, and nothing was changed.', 'wpaqs' )
+			);
+		}
+
+		return self::result(
+			true,
+			true,
+			'revoked',
+			__( 'The application password was revoked. Anything using it stops working until somebody issues a new one; browser sessions are unaffected.', 'wpaqs' )
+		);
+	}
+
+	/**
+	 * Take a directly granted capability off an account.
+	 *
+	 * The role is untouched on purpose: removing what a role grants would be undone the
+	 * moment WordPress read the role again, so that request is refused and the wording
+	 * says where the grant comes from.
+	 *
+	 * @param int    $user_id The account.
+	 * @param string $cap     The capability.
+	 * @param int    $actor   The user asking, or 0 when nobody is.
+	 * @return array The result contract.
+	 */
+	public static function remove_capability( $user_id, $cap, $actor ) {
+		$cap    = (string) $cap;
+		$result = WPAQS_Accounts::remove_direct_capability( (int) $user_id, $cap, $actor );
+
+		// Only two codes. remove_direct_capability() reports its five refusals as prose
+		// and nothing else, so finer codes mean changing its contract — worth its own
+		// commit rather than being buried in an extraction.
+		if ( '' !== $result['error'] ) {
+			return self::result( false, false, 'capability-refused', $result['error'], array( 'cap' => $cap ) );
+		}
+
+		return self::result(
+			true,
+			true,
+			'capability-removed',
+			__( 'The capability was taken off the account. Its role is unchanged, and granting it again puts it back.', 'wpaqs' ),
+			array( 'cap' => $cap )
+		);
+	}
+
+	/**
+	 * Set the role new accounts receive to the one that can only read.
+	 *
+	 * A setting rather than a deletion: Settings → General puts it back. Paired with
+	 * closing registration, because either alone is ordinary — a membership site has
+	 * registration open, and a custom default role is a normal choice. The pair is the
+	 * finding.
+	 *
+	 * @param int $actor The user asking, or 0 when nobody is. No refusal here depends on
+	 *                   it: the target is a site option, not an account.
+	 * @return array The result contract.
+	 */
+	public static function park_default_role( $actor ) {
+		unset( $actor );
+
+		$result = WPAQS_Registration::park_default_role();
+
+		if ( '' !== $result['error'] ) {
+			return self::result( false, false, 'registration-refused', $result['error'] );
+		}
+
+		return self::result(
+			true,
+			true,
+			'default-role-parked',
+			__( 'New accounts are Subscribers now. Existing accounts keep the roles they already have.', 'wpaqs' )
+		);
+	}
+
+	/**
+	 * Close public registration on this site.
+	 *
+	 * On multisite this is a network option and WPAQS_Registration refuses, pointing at
+	 * Network Settings — a button that appeared to work and changed nothing would be
+	 * worse than no button.
+	 *
+	 * @param int $actor The user asking, or 0 when nobody is. No refusal here depends on
+	 *                   it: the target is a site option, not an account.
+	 * @return array The result contract.
+	 */
+	public static function close_registration( $actor ) {
+		unset( $actor );
+
+		$result = WPAQS_Registration::close();
+
+		if ( '' !== $result['error'] ) {
+			return self::result( false, false, 'registration-refused', $result['error'] );
+		}
+
+		return self::result(
+			true,
+			true,
+			'registration-closed',
+			__( 'Public registration is closed. Settings → General opens it again.', 'wpaqs' )
+		);
+	}
+
+	/**
 	 * Assemble the result contract.
 	 *
 	 * ok answers "did what was asked happen in full"; changed answers "did the site
