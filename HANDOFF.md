@@ -1,7 +1,7 @@
-# Handoff — not started yet
+# Handoff — phase 2b done
 
-**Last worked:** 2026-08-20 — read only. **No code in this repo has changed.**
-**This repo's part:** phase 2b, then phases 3–6 alongside the sibling.
+**Last worked:** 2026-08-20
+**This repo's part:** phase 2b — **done**. Then phases 3–6 alongside the sibling.
 
 ## Where this fits
 
@@ -19,13 +19,42 @@ and goes **second on purpose**: it has six actions rather than ten, they are sho
 and they already express most refusals as a redirect rather than `wp_die()`. It is the
 easier half and benefits from a pattern already proven.
 
-## Status: untouched
+## Status: the extraction is done
 
-`main`, clean. Nothing to resume mid-flight.
+**Branch:** `chore/action-logic-extraction` — based on `docs/handoff`, which carries
+this file. Not pushed at the time of writing.
+
+```
+518891c  chore: who is acting is passed in, not read from the session
+d237c0e  chore: ending sessions is callable without a request
+d9380a3  chore: the last four actions leave the handler, and it cannot act again
+```
+
+All six site-changing actions are in `WPAQS_Actions`. `class-controller.php` is **296
+lines, down from 308** — capability, nonce, parse, delegate, redirect.
+
+**623 assertions, 0 failures. `./build.sh` produces a zip.** Baseline was 554.
+
+The pattern is locked, not just applied: `test-actions.php` fails if the controller
+calls any of seven ways of performing an action, and fails if an endpoint stops
+delegating.
+
+### Three things worth knowing before phase 3
+
+- **`WPAQS_Accounts::remove_direct_capability()` carried its own `self` and `nocap`.**
+  An audit of the endpoints would have missed it. The sibling's handoff said to grep
+  everything an action touches rather than only the controller, and that is exactly
+  what found it.
+- **The lock-in assertions were written after `finish()` the first time**, which
+  exits, so neither ran. They passed green while proving nothing. Mutation caught it.
+  If you add assertions to this file, put them above `finish()` and mutate them.
+- **`revoke_password` still checks live state** — `WPAQS_App_Passwords::exists()` — and
+  that assertion moved with it into the actions class rather than going away. Do not
+  introduce a stored report to mirror the sibling; live is the stronger arrangement.
 
 ## What this repo will need, in order
 
-### Phase 2b — the action logic extraction
+### Phase 2b — the action logic extraction (done, kept for the reasoning)
 
 Mirror of what the sibling **has now finished**. Read its `WPMQS_Actions` and its
 `tests/test-actions.php` rather than only the plan — the pattern is settled and the
