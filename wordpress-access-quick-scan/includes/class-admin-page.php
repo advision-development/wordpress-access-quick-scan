@@ -469,7 +469,7 @@ class WPAQS_Admin_Page {
 						// counting buttons rather than by reading this file.
 						$rows_open     = WPAQS_Sessions::open( $rows_sessions );
 						$controls      = WPAQS_Sessions::controls( count( $rows_open ) );
-						$refusal       = WPAQS_Controller::session_refusal( $row['id'] );
+						$refusal       = WPAQS_Controller::session_refusal( $row['id'], get_current_user_id() );
 						?>
 						<tr>
 							<td>

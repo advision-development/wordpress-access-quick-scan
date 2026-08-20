@@ -141,6 +141,46 @@ shut by default.
 cannot drift from the sentence explaining it. Readers supply a target and an evidence
 string and nothing else.
 
+**Every site-changing action lives in `WPAQS_Actions`, and the controller only
+translates.** `WPAQS_Controller` checks a capability, checks a nonce, parses the
+request, delegates, and redirects — it performs nothing. A later phase runs the same
+actions from a signed remote command with no logged-in user and no nonce, and a
+refusal living in the HTTP handler would apply to the web path and not to that one.
+
+The guarantee is not that both paths are well tested. It is that **there is one
+implementation and the controller cannot reach past it**, which `test-actions.php`
+pins twice: it fails if the controller calls any of seven ways of performing an
+action, and it fails if a site-changing endpoint stops reaching `WPAQS_Actions`. The
+first alone would pass on a controller that quietly does nothing.
+
+Actions return one shape — `ok`, `changed`, `code`, `message`, `data`. `ok` answers
+"did what was asked happen in full" and `changed` answers "did the site change at
+all": ending sessions for an account that had none succeeded and changed nothing, and
+one boolean cannot say both. `message` is the only human-facing string; nothing
+outside this plugin may map a `code` to a sentence, or the wording lives in two
+repositories.
+
+**The acting user is passed in, never read from the session.** `get_current_user_id()`
+is 0 under cron and `current_user_can()` is false for everything, so guards that read
+them break in opposite directions: `self` compares against user 0 and silently stops
+applying, while `nocap` becomes true for every target and refuses the remote path
+outright — the more dangerous of the two, because it looks like a working control.
+Guards that depend on an actor do not apply when there is none; guards that never
+did still do. `$actor` is required with no default: a default of 0 would have been a
+regression in the path that already works.
+
+**Two of those guards were not in the controller.** `WPAQS_Accounts::remove_direct_capability()`
+carried its own copy of both. An audit of the endpoints would have missed it, and the
+sibling hit the same thing — grep everything an action touches, not only the handler.
+
+**Adding an argument at a call site cannot drive an implementation.** PHP silently
+ignores extra arguments to a user-defined function, so a test updated to pass `$actor`
+passes against a class that ignores it. The forcing assertion has to be behavioural.
+
+**And an assertion placed after `finish()` never runs.** That happened here while
+writing the two above: they passed green without executing. Mutating the thing an
+assertion forbids, and watching it fail, is the only way to know it is one.
+
 ## Lessons, most of them inherited
 
 **Four states that look identical.** A plugin row with no update could mean the check has not
@@ -374,7 +414,7 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-sessions.php` | Scripted-versus-browser classification both ways, malformed session meta reported rather than skipped |
 | `test-app-passwords.php` | Unused, foreign address, no recorded address, and a password used from a live session's own IP |
 | `test-registration.php` | The combination fires; each half alone does not; `'0'` is not truthy |
-| `test-actions.php` | The self refusal, the multisite capability, nonce scoping, live existence, and that nothing calls a user delete |
+| `test-actions.php` | What each extracted action refuses and what it reports, called with no request around it — plus the self refusal, the multisite capability, nonce scoping, live existence, that nothing calls a user delete, and the two assertions that stop the controller growing a second path |
 | `test-filter.php` | The view allowlist, the hidden count, that an empty result still reports the view, and that sorting and filtering preserve each other's arguments while carrying nothing else from the request |
 | `test-sort.php` | The allowlist, per-table isolation, numbers not sorting like text, never-used first, stable ties, and the link reversing the active column |
 | `test-group.php` | One group per rule and severity, nothing lost or reordered, the shared prefix and its sentence boundary, a lone group left intact |

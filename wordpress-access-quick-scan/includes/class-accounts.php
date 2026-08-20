@@ -462,9 +462,10 @@ class WPAQS_Accounts {
 	 * @param string $cap     Capability name.
 	 * @return array array( error )
 	 */
-	public static function remove_direct_capability( $user_id, $cap ) {
+	public static function remove_direct_capability( $user_id, $cap, $actor ) {
 		$user_id = (int) $user_id;
 		$cap     = (string) $cap;
+		$actor   = (int) $actor;
 
 		$user = get_userdata( $user_id );
 
@@ -472,11 +473,14 @@ class WPAQS_Accounts {
 			return array( 'error' => __( 'That account no longer exists.', 'wpaqs' ) );
 		}
 
-		if ( get_current_user_id() === $user_id ) {
+		// No actor means no screen to lose access to, so the guard has nothing to protect.
+		if ( 0 !== $actor && $actor === $user_id ) {
 			return array( 'error' => __( 'That is the account you are signed in with. Taking a capability off it could remove your own access to this screen — use another administrator account.', 'wpaqs' ) );
 		}
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+		// Asked of the actor. current_user_can() is false for everything under cron, which
+		// would refuse every command rather than the ones that should be refused.
+		if ( 0 !== $actor && ! user_can( $actor, 'edit_user', $user_id ) ) {
 			return array( 'error' => __( 'This site does not let you edit that account.', 'wpaqs' ) );
 		}
 

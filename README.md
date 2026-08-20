@@ -120,6 +120,11 @@ again.
 Settings → General puts either back. On a network, registration is a network setting and the
 screen says so rather than offering a button that would change nothing.
 
+**Corrective actions live in `WPAQS_Actions`, not in the endpoint.** The endpoint
+checks a capability and a nonce, then delegates and redirects. A refusal that lived in
+the handler would apply to the button and not to anything else that ever calls the
+same action, and the tests fail if the controller reaches past it.
+
 **Nothing here deletes an account, or anything it created.** `wp_delete_user()` reassigns or
 destroys the account's posts, and those posts are the record of what it did.
 
@@ -129,7 +134,7 @@ destroys the account's posts, and those posts are the record of what it did.
 ./tests/run.sh
 ```
 
-Six harnesses, no WordPress install needed — the functions it touches are stubbed in
+623 assertions across twelve harnesses, no WordPress install needed — the functions it touches are stubbed in
 `tests/wp-stubs.php`.
 
 Every rule ships with the benign case that must stay silent. A rule without a

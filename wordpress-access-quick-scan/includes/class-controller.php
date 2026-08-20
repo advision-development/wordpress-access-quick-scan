@@ -56,25 +56,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-end-session-' . $user_id . '-' . $verifier );
 
-		// The self refusal does not apply here the way it does to ending every session: an
-		// administrator with one browser session and one opened by a script should be able to
-		// close the script's without signing themselves out. What protects them is that the
-		// session is named rather than the account.
-		if ( ! get_userdata( $user_id ) ) {
-			self::redirect( 'sessions-refused', self::refusal_text( 'missing' ) );
-		}
+		$result = WPAQS_Actions::end_session( $user_id, $verifier, get_current_user_id() );
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
-			self::redirect( 'sessions-refused', self::refusal_text( 'nocap' ) );
-		}
-
-		$result = WPAQS_Sessions::end_one( $user_id, $verifier );
-
-		if ( '' === $result['error'] ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'session-ended' );
 		}
 
-		self::redirect( 'sessions-refused', $result['error'] );
+		self::redirect( 'sessions-refused', $result['message'] );
 	}
 
 	/**
@@ -92,13 +80,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-remove-cap-' . $user_id . '-' . $cap );
 
-		$result = WPAQS_Accounts::remove_direct_capability( $user_id, $cap );
+		$result = WPAQS_Actions::remove_capability( $user_id, $cap, get_current_user_id() );
 
-		if ( '' === $result['error'] ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'capability-removed', '', array( 'wpaqs-cap' => $cap ) );
 		}
 
-		self::redirect( 'capability-refused', $result['error'] );
+		self::redirect( 'capability-refused', $result['message'] );
 	}
 
 	/**
@@ -113,13 +101,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-park-default-role' );
 
-		$result = WPAQS_Registration::park_default_role();
+		$result = WPAQS_Actions::park_default_role( get_current_user_id() );
 
-		if ( '' === $result['error'] ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'default-role-parked' );
 		}
 
-		self::redirect( 'registration-refused', $result['error'] );
+		self::redirect( 'registration-refused', $result['message'] );
 	}
 
 	/**
@@ -134,13 +122,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-close-registration' );
 
-		$result = WPAQS_Registration::close();
+		$result = WPAQS_Actions::close_registration( get_current_user_id() );
 
-		if ( '' === $result['error'] ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'registration-closed' );
 		}
 
-		self::redirect( 'registration-refused', $result['error'] );
+		self::redirect( 'registration-refused', $result['message'] );
 	}
 
 	/**
@@ -167,23 +155,34 @@ class WPAQS_Controller {
 	/**
 	 * Why an account's sessions may not be ended, or '' when they may.
 	 *
+	 * Two of these guards are about who is asking, and a signed remote command runs under
+	 * cron with nobody logged in. Passing the actor makes that explicit instead of leaving
+	 * the guards to read a global that is 0 there: `self` would compare against user 0 and
+	 * silently stop applying, and `nocap` would be true for everything and refuse the
+	 * remote path outright. `$actor` is required, with no default, so every caller decides.
+	 *
 	 * @param int $user_id User id.
+	 * @param int $actor   Acting user id, or 0 when no user is acting.
 	 * @return string One of '', 'missing', 'self', 'nocap'.
 	 */
-	public static function session_refusal( $user_id ) {
+	public static function session_refusal( $user_id, $actor ) {
 		$user_id = (int) $user_id;
+		$actor   = (int) $actor;
 
 		if ( $user_id <= 0 || ! get_userdata( $user_id ) ) {
 			return 'missing';
 		}
 
 		// Ending your own sessions signs you out of the screen you are working from, in the
-		// middle of whatever brought you here.
-		if ( get_current_user_id() === $user_id ) {
+		// middle of whatever brought you here. A command has no screen to lose, so with no
+		// actor there is nothing here to protect.
+		if ( 0 !== $actor && $actor === $user_id ) {
 			return 'self';
 		}
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+		// Asked of the actor rather than of whoever happens to be signed in. That coupling
+		// is what breaks under cron, where current_user_can() answers false for everything.
+		if ( 0 !== $actor && ! user_can( $actor, 'edit_user', $user_id ) ) {
 			return 'nocap';
 		}
 
@@ -227,19 +226,13 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-end-sessions-' . $user_id );
 
-		$refusal = self::session_refusal( $user_id );
+		$result = WPAQS_Actions::end_sessions( $user_id, get_current_user_id() );
 
-		if ( '' !== $refusal ) {
-			self::redirect( 'sessions-refused', self::refusal_text( $refusal ) );
+		if ( ! $result['ok'] ) {
+			self::redirect( 'sessions-refused', $result['message'] );
 		}
 
-		$count = count( WPAQS_Sessions::for_user( $user_id ) );
-
-		if ( class_exists( 'WP_Session_Tokens' ) ) {
-			WP_Session_Tokens::get_instance( $user_id )->destroy_all();
-		}
-
-		self::redirect( 'sessions-ended', '', array( 'wpaqs-count' => $count ) );
+		self::redirect( 'sessions-ended', '', array( 'wpaqs-count' => (int) $result['data']['count'] ) );
 	}
 
 	/**
@@ -262,28 +255,23 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-revoke-' . $user_id . '-' . $uuid );
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
-			wp_die( esc_html__( 'This site does not let you edit that account.', 'wpaqs' ), '', array( 'response' => 403 ) );
+		$result = WPAQS_Actions::revoke_password( $user_id, $uuid, get_current_user_id() );
+
+		// Neither could come from the screen: it only draws the button for a password
+		// that is on the account, and never for one this WordPress cannot hold.
+		if ( 'nocap' === $result['code'] ) {
+			wp_die( esc_html( $result['message'] ), '', array( 'response' => 403 ) );
 		}
 
-		if ( ! WPAQS_App_Passwords::available() ) {
-			wp_die( esc_html__( 'This WordPress version does not support application passwords.', 'wpaqs' ), '', array( 'response' => 400 ) );
+		if ( 'unsupported' === $result['code'] ) {
+			wp_die( esc_html( $result['message'] ), '', array( 'response' => 400 ) );
 		}
 
-		// Checked live. Nothing is trusted from the request beyond the pair being named,
-		// and a pair that is not on the account right now is not something to act on.
-		if ( ! WPAQS_App_Passwords::exists( $user_id, $uuid ) ) {
-			self::redirect( 'revoke-refused', __( 'That application password is not on that account any more, so nothing was revoked. Reload the screen to see the current list.', 'wpaqs' ) );
-		}
-
-		$result  = WP_Application_Passwords::delete_application_password( $user_id, $uuid );
-		$revoked = ( true === $result || ( ! is_wp_error( $result ) && $result ) );
-
-		if ( $revoked ) {
+		if ( $result['ok'] ) {
 			self::redirect( 'revoked' );
 		}
 
-		self::redirect( 'revoke-refused', __( 'WordPress refused to delete that application password, and nothing was changed.', 'wpaqs' ) );
+		self::redirect( 'revoke-refused', $result['message'] );
 	}
 
 	/**
