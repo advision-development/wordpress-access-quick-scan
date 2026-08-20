@@ -58,6 +58,10 @@ spl_autoload_register(
 	}
 );
 
+// Cron requests are neither admin nor front end, and REST is neither either.
+WPAQS_Cron::register();
+WPAQS_Fleet_Verify::register();
+
 add_action( 'admin_menu', array( 'WPAQS_Admin_Page', 'add_menu' ) );
 add_action( 'admin_enqueue_scripts', array( 'WPAQS_Admin_Page', 'enqueue' ) );
 add_action( 'admin_init', array( 'WPAQS_Controller', 'register' ) );
@@ -66,3 +70,22 @@ add_action( 'admin_init', array( 'WPAQS_Controller', 'register' ) );
 // however many releases are published. See class-updater.php: it is the only thing here that
 // hands WordPress a URL to download and run.
 WPAQS_Updater::register();
+
+/**
+ * Activation: put the daily report on the schedule.
+ *
+ * Creates no tables and touches nothing the site already has. The only scheduled event
+ * registered is this plugin's own.
+ */
+function wpaqs_activate() {
+	WPAQS_Cron::schedule();
+}
+register_activation_hook( __FILE__, 'wpaqs_activate' );
+
+/**
+ * Deactivation: take it off again, and nothing else.
+ */
+function wpaqs_deactivate() {
+	WPAQS_Cron::unschedule();
+}
+register_deactivation_hook( __FILE__, 'wpaqs_deactivate' );

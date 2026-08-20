@@ -1,0 +1,19 @@
+<?php
+/**
+ * Hashes of the shared files, with the plugin prefix and directory normalised away.
+ *
+ * Both plugins carry this file and both carry the same values, PLUGIN/ standing for
+ * whichever plugin directory the repository has. A shared file changed in one and not
+ * the other fails that repository own build, which is what makes the byte-identical
+ * rule a verification rather than a note in CLAUDE.md.
+ *
+ * Regenerate in BOTH plugins after changing a shared file in both.
+ *
+ * @package WPAQS
+ */
+
+return array(
+	'PLUGIN/includes/class-fleet.php'              => '0e5401f6b4c4ae47ab6d8a994d8480efb3ad232ff053ba91a6c0c8e374ee7cc8',
+	'PLUGIN/includes/class-fleet-verify.php'       => '93b90d094e3c4067afcfb61b6b5c58b507b934148754fcfbfee26c1df03e336c',
+	'tests/wp-stubs.php'                           => '20f67dc2afb3bf7f5239330286798a6092c8352dbb2c9fb7fd447193b6c3c592',
+);

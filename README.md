@@ -73,8 +73,10 @@ Stated on the screen too, because "nothing found" is not the same as "nothing th
 
 - **Failed logins.** WordPress core records none. There is no data to read.
 - **Login history.** Only sessions still open. An expired or ended session leaves nothing.
-- **Whether an address is suspicious.** Addresses are shown so you can recognise them. The
-  plugin makes no network requests and holds no opinion about any of them.
+- **Whether an address is suspicious.** Addresses are shown so you can recognise them.
+  This plugin holds no opinion about any of them and asks nothing about them. It does
+  make network requests — to the update check, and, once enrolled, to the fleet console
+  it reports to — but never about an address it found.
 - **Files, core, and hardening settings.** A different question and a different plugin.
 
 ## Only what is active

@@ -2,8 +2,13 @@
 /**
  * Uninstall cleanup.
  *
- * Almost nothing to clean. Every screen reads the database live and throws the result away
- * when the request ends, so this plugin stores no options and schedules no events.
+ * Little to clean, and less than there used to be.
+ *
+ * Every screen still reads the database live and throws the result away when the request
+ * ends. What changed is the fleet console: a site that reports to it keeps a key, the nonce
+ * that identifies this install, and when it last managed to send — and it schedules one
+ * event to do the sending. Those are named below, which is what the last line of this
+ * docblock has always asked for.
  *
  * The one exception is the update check. `WPAQS_Updater` caches GitHub's answer about the
  * latest release, including the answer "that failed" — because GitHub allows 60
@@ -24,3 +29,11 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) || ! defined( 'ABSPATH' ) ) {
 }
 
 delete_site_transient( 'wpaqs_release' );
+
+// The key, the install nonce, and when the last report went. Deleting the key is the
+// point: an uninstalled plugin that left one behind would leave a credential on a site
+// nobody is watching any more.
+delete_option( 'wpaqs_fleet' );
+
+// The only event this plugin ever schedules.
+wp_clear_scheduled_hook( 'wpaqs_daily_report' );
