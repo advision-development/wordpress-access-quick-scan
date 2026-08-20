@@ -14,7 +14,7 @@
 
 return array(
 	'PLUGIN/includes/class-fleet.php'              => '0e5401f6b4c4ae47ab6d8a994d8480efb3ad232ff053ba91a6c0c8e374ee7cc8',
-	'PLUGIN/includes/class-fleet-panel.php'        => '5fdcf602cefb368beea56b17bdfad4cfa9f3efb8316da1969a38dace1b1ffe1a',
+	'PLUGIN/includes/class-fleet-panel.php'        => '08fc547b3bde97d87856d83fb3dc9430274f2b7de2c39ff56966acfa879146d5',
 	'PLUGIN/includes/class-fleet-verify.php'       => '93b90d094e3c4067afcfb61b6b5c58b507b934148754fcfbfee26c1df03e336c',
 	'tests/wp-stubs.php'                           => '20f67dc2afb3bf7f5239330286798a6092c8352dbb2c9fb7fd447193b6c3c592',
 );
