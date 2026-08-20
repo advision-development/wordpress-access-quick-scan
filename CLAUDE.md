@@ -21,6 +21,8 @@ wordpress-access-quick-scan/   the plugin — this is what gets zipped
 tests/                         CLI harnesses, no WordPress install needed
 build.sh                       lint + 7.4 gate + tests + zip
 CHANGELOG.md                   what changed and which false positive drove it
+WPSEC-HANDOFF.md               how the fleet transport works and why
+WPSEC-PENDING.md               what it still owes — read this one first
 dist/                          build output, not committed
 ```
 
