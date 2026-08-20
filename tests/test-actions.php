@@ -19,6 +19,14 @@ function get_current_user_id() {
 function current_user_can( $cap, $object_id = null ) {
 	return ! empty( $GLOBALS['caps'][ $cap ] );
 }
+/**
+ * Asked about a named user rather than the session. False for user 0, as WordPress
+ * answers, so a lenient stub cannot let an implementation that forgot to skip the
+ * check for a caller with no user pass anyway.
+ */
+function user_can( $user, $cap, $object_id = null ) {
+	return 0 === (int) $user ? false : ! empty( $GLOBALS['caps'][ $cap ] );
+}
 
 function is_multisite() {
 	return (bool) $GLOBALS['multisite'];
@@ -51,22 +59,35 @@ function acting( $current, array $caps, $multisite = false ) {
 
 acting( 1, array( 'manage_options' => true, 'edit_user' => true ) );
 
-check( 'another account can have its sessions ended', '' === WPAQS_Controller::session_refusal( 7 ) );
+check( 'another account can have its sessions ended', '' === WPAQS_Controller::session_refusal( 7, 1 ) );
 
 check(
 	'your own account is refused',
-	'self' === WPAQS_Controller::session_refusal( 1 ),
+	'self' === WPAQS_Controller::session_refusal( 1, 1 ),
 	'ending your own sessions signs you out of this screen'
 );
 
+// A signed remote command runs under cron with nobody logged in, so every guard that
+// reads a session has to be asked what it means when there is none. `self` protects an
+// operator from signing themselves out of the screen they are pressing the button on.
+// There is no screen behind a command, so it has nothing to protect and must stop
+// applying — rather than silently comparing against user 0.
+check( 'with no acting user there is no self to protect', 'self' !== WPAQS_Controller::session_refusal( 1, 0 ) );
+check( 'and the account is otherwise eligible', '' === WPAQS_Controller::session_refusal( 1, 0 ), WPAQS_Controller::session_refusal( 1, 0 ) );
+
 check( 'and the wording says you would be signed out', false !== stripos( WPAQS_Controller::refusal_text( 'self' ), 'sign you out' ) );
 
-check( 'an account that does not exist is refused', 'missing' === WPAQS_Controller::session_refusal( 404 ) );
-check( 'id zero is refused', 'missing' === WPAQS_Controller::session_refusal( 0 ) );
-check( 'a negative id is refused', 'missing' === WPAQS_Controller::session_refusal( -5 ) );
+check( 'an account that does not exist is refused', 'missing' === WPAQS_Controller::session_refusal( 404, 1 ) );
+check( 'id zero is refused', 'missing' === WPAQS_Controller::session_refusal( 0, 1 ) );
+check( 'a negative id is refused', 'missing' === WPAQS_Controller::session_refusal( -5, 1 ) );
 
 acting( 1, array( 'manage_options' => true ) );
-check( 'an account you cannot edit is refused', 'nocap' === WPAQS_Controller::session_refusal( 7 ) );
+check( 'an account you cannot edit is refused', 'nocap' === WPAQS_Controller::session_refusal( 7, 1 ) );
+
+// The mirror-image failure, and the more dangerous one: read through current_user_can()
+// under cron this is false for everything, so a command would be refused outright — a
+// control that looks like it works and never does.
+check( 'a caller with no user is not refused for capabilities', 'nocap' !== WPAQS_Controller::session_refusal( 7, 0 ) );
 
 check( 'every refusal has wording', '' !== WPAQS_Controller::refusal_text( 'missing' )
 	&& '' !== WPAQS_Controller::refusal_text( 'self' )

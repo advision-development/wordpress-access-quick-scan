@@ -55,6 +55,14 @@ function get_current_user_id() {
 function current_user_can( $cap, $object_id = null ) {
 	return ! empty( $GLOBALS['acting_caps'][ $cap ] );
 }
+/**
+ * Asked about a named user rather than the session. False for user 0, as WordPress
+ * answers, so a lenient stub cannot let an implementation that forgot to skip the
+ * check for a caller with no user pass anyway.
+ */
+function user_can( $user, $cap, $object_id = null ) {
+	return 0 === (int) $user ? false : ! empty( $GLOBALS['acting_caps'][ $cap ] );
+}
 
 function count_users() {
 	return array( 'total_users' => count( $GLOBALS['users'] ) );
@@ -289,7 +297,7 @@ $GLOBALS['acting_caps'] = array( 'manage_options' => true, 'edit_user' => true )
 
 // The subscriber that can edit users: the finding asks the operator to confirm the grant, and
 // this is what confirming sometimes ends in.
-$removed = WPAQS_Accounts::remove_direct_capability( 7, 'edit_users' );
+$removed = WPAQS_Accounts::remove_direct_capability( 7, 'edit_users', 1 );
 
 check( 'a directly granted capability can be taken off', '' === $removed['error'], $removed['error'] );
 check( 'and it is gone from the account', ! isset( $GLOBALS['users'][7]->caps['edit_users'] ) );
@@ -302,7 +310,7 @@ check(
 );
 
 // Live, not from a report: a capability already removed is not something to act on.
-check( 'removing it twice is refused', '' !== WPAQS_Accounts::remove_direct_capability( 7, 'edit_users' )['error'] );
+check( 'removing it twice is refused', '' !== WPAQS_Accounts::remove_direct_capability( 7, 'edit_users', 1 )['error'] );
 
 // A capability that comes from the role was never this button's to take: removing it from the
 // account changes nothing, because WordPress reads it from the role again.
@@ -310,13 +318,13 @@ check( 'removing it twice is refused', '' !== WPAQS_Accounts::remove_direct_capa
 // answers a different question — which is what the first version of this assertion did.
 check(
 	'a capability that comes from the role is refused',
-	'' !== WPAQS_Accounts::remove_direct_capability( 17, 'install_plugins' )['error'],
+	'' !== WPAQS_Accounts::remove_direct_capability( 17, 'install_plugins', 1 )['error'],
 	'it would appear to work and change nothing'
 );
 
 check(
 	'and the refusal says where the grant comes from',
-	false !== stripos( WPAQS_Accounts::remove_direct_capability( 17, 'install_plugins' )['error'], 'comes from its role' )
+	false !== stripos( WPAQS_Accounts::remove_direct_capability( 17, 'install_plugins', 1 )['error'], 'comes from its role' )
 );
 
 // Your own account: stripping your own manage_options locks you out of the screen.
@@ -325,15 +333,24 @@ $GLOBALS['users'][13]->caps['edit_users'] = true;
 
 check(
 	'your own account is refused',
-	'' !== WPAQS_Accounts::remove_direct_capability( 13, 'edit_users' )['error'],
+	'' !== WPAQS_Accounts::remove_direct_capability( 13, 'edit_users', 13 )['error'],
 	'you can remove your own access to this screen'
 );
+
+// The same question a command asks: with nobody signed in there is no self to protect,
+// and the guard has to stop applying rather than compare against user 0.
+check(
+	'with no acting user there is no self to protect',
+	'' === WPAQS_Accounts::remove_direct_capability( 13, 'edit_users', 0 )['error'],
+	WPAQS_Accounts::remove_direct_capability( 13, 'edit_users', 0 )['error']
+);
+$GLOBALS['users'][13]->caps['edit_users'] = true;
 
 check( 'and the capability is still there', isset( $GLOBALS['users'][13]->caps['edit_users'] ) );
 
 $GLOBALS['acting'] = 1;
 
-check( 'an account that does not exist is refused', '' !== WPAQS_Accounts::remove_direct_capability( 404, 'edit_users' )['error'] );
+check( 'an account that does not exist is refused', '' !== WPAQS_Accounts::remove_direct_capability( 404, 'edit_users', 1 )['error'] );
 
 // Only capabilities the screen reports get buttons, so a request for anything else did not
 // come from one.
@@ -341,13 +358,21 @@ $GLOBALS['users'][13]->caps['read_private_pages'] = true;
 
 check(
 	'a capability the screen never offers is refused',
-	'' !== WPAQS_Accounts::remove_direct_capability( 13, 'read_private_pages' )['error'],
+	'' !== WPAQS_Accounts::remove_direct_capability( 13, 'read_private_pages', 1 )['error'],
 	'the screen only reports notable ones, so only those have buttons'
 );
 
 $GLOBALS['acting_caps'] = array( 'manage_options' => true );
 
-check( 'an account you cannot edit is refused', '' !== WPAQS_Accounts::remove_direct_capability( 13, 'edit_users' )['error'] );
+check( 'an account you cannot edit is refused', '' !== WPAQS_Accounts::remove_direct_capability( 13, 'edit_users', 1 )['error'] );
+
+// The mirror-image failure: through current_user_can() under cron this is false for
+// everything and no command would ever remove a capability.
+check(
+	'a caller with no user is not refused for capabilities',
+	false === stripos( WPAQS_Accounts::remove_direct_capability( 13, 'edit_users', 0 )['error'], 'does not let you edit' ),
+	WPAQS_Accounts::remove_direct_capability( 13, 'edit_users', 0 )['error']
+);
 
 // ------------------------------------------------------- pending password reset
 

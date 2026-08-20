@@ -92,7 +92,7 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-remove-cap-' . $user_id . '-' . $cap );
 
-		$result = WPAQS_Accounts::remove_direct_capability( $user_id, $cap );
+		$result = WPAQS_Accounts::remove_direct_capability( $user_id, $cap, get_current_user_id() );
 
 		if ( '' === $result['error'] ) {
 			self::redirect( 'capability-removed', '', array( 'wpaqs-cap' => $cap ) );
@@ -167,23 +167,34 @@ class WPAQS_Controller {
 	/**
 	 * Why an account's sessions may not be ended, or '' when they may.
 	 *
+	 * Two of these guards are about who is asking, and a signed remote command runs under
+	 * cron with nobody logged in. Passing the actor makes that explicit instead of leaving
+	 * the guards to read a global that is 0 there: `self` would compare against user 0 and
+	 * silently stop applying, and `nocap` would be true for everything and refuse the
+	 * remote path outright. `$actor` is required, with no default, so every caller decides.
+	 *
 	 * @param int $user_id User id.
+	 * @param int $actor   Acting user id, or 0 when no user is acting.
 	 * @return string One of '', 'missing', 'self', 'nocap'.
 	 */
-	public static function session_refusal( $user_id ) {
+	public static function session_refusal( $user_id, $actor ) {
 		$user_id = (int) $user_id;
+		$actor   = (int) $actor;
 
 		if ( $user_id <= 0 || ! get_userdata( $user_id ) ) {
 			return 'missing';
 		}
 
 		// Ending your own sessions signs you out of the screen you are working from, in the
-		// middle of whatever brought you here.
-		if ( get_current_user_id() === $user_id ) {
+		// middle of whatever brought you here. A command has no screen to lose, so with no
+		// actor there is nothing here to protect.
+		if ( 0 !== $actor && $actor === $user_id ) {
 			return 'self';
 		}
 
-		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+		// Asked of the actor rather than of whoever happens to be signed in. That coupling
+		// is what breaks under cron, where current_user_can() answers false for everything.
+		if ( 0 !== $actor && ! user_can( $actor, 'edit_user', $user_id ) ) {
 			return 'nocap';
 		}
 
@@ -227,7 +238,7 @@ class WPAQS_Controller {
 
 		check_admin_referer( WPAQS_NONCE . '-end-sessions-' . $user_id );
 
-		$refusal = self::session_refusal( $user_id );
+		$refusal = self::session_refusal( $user_id, get_current_user_id() );
 
 		if ( '' !== $refusal ) {
 			self::redirect( 'sessions-refused', self::refusal_text( $refusal ) );
