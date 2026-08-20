@@ -86,12 +86,27 @@ class WPAQS_Cron {
 			return;
 		}
 
-		$gathered = WPAQS_Report::gather();
-
-		// Derived from the day rather than generated, so a cron that fires twice — which
+		// Derived from the hour rather than generated, so a cron that fires twice — which
 		// WP-Cron does on a busy site — is one report to the console instead of two
 		// readings that never both happened.
-		WPAQS_Fleet::push( $gathered, gmdate( 'Y-m-d' ) );
+		self::report_to_fleet_if_enrolled();
+	}
+
+	/**
+	 * Send a report now, if this site is enrolled.
+	 *
+	 * Named to match the sibling's so the shared panel can call it without knowing which
+	 * plugin it is in. There is no scan to wait for here — reading live state *is* the
+	 * read — so this is the whole of what the daily event does.
+	 *
+	 * @return void
+	 */
+	public static function report_to_fleet_if_enrolled() {
+		if ( ! class_exists( 'WPAQS_Fleet' ) || ! WPAQS_Fleet::enrolled() ) {
+			return;
+		}
+
+		WPAQS_Fleet::push( WPAQS_Report::gather(), gmdate( 'Y-m-d-H' ) );
 	}
 
 	/**

@@ -3,6 +3,24 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.3
+
+**A manual scan reports too, and there is a button that does not wait for the
+schedule.** Both were gaps in 0.8.2.
+
+The push was hooked to the cron path only, so a scan somebody ran by hand finished,
+stored its report, and the console never heard about it. The reasoning copied from the
+mailer — that somebody watching a run does not need it in their inbox — does not carry:
+a console is a record, not an inbox, and leaving it stale while the site holds a fresher
+answer is two sources disagreeing, which is the thing this plugin exists to notice
+rather than cause.
+
+**The panel's result is rendered by the panel.** It redirected with a notice key the
+screen did not recognise, so pressing a button rendered nothing — and a button that
+renders nothing is indistinguishable from one that did nothing. The two plugins render
+notices differently, so a shared panel handing its result to either would have looked
+broken in exactly one of them, which is the hardest kind to notice.
+
 ## 0.8.2
 
 **A panel on the screen, and a button that does not wait for tomorrow.** Enrolment
