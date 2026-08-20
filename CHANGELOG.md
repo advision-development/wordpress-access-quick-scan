@@ -3,6 +3,51 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.1
+
+**This plugin reports to a fleet console, and three things it never did before are now
+true of it.** Each was absent by design and its own documentation said so, which is why
+each statement is corrected in the same version that makes it untrue.
+
+**It stores something.** A key, the nonce identifying this install, and when the last
+report went. `uninstall.php` names them, and deleting the key is the point: an
+uninstalled plugin that left one behind would leave a credential on a site nobody
+watches any more.
+
+**It schedules something.** There was no scheduler, and the reason was sound — somebody
+opens the screen. That holds for one site and fails for 162, which cannot be opened one
+at a time. The event reports and nothing else: there is no scan here, because reading
+live state *is* the read. In UTC, because a site-local hour moves whenever somebody
+edits the timezone setting and a fleet then reports at unrelated times.
+
+**It makes network requests.** The README said it did not, in the section about
+holding no opinion on any IP address. It still holds none and still asks nothing about
+one — but it talks to the update check and, once enrolled, to the console.
+
+**The findings moved out of the screen.** `render()` assembled them inline, which was
+fine while the screen was the only thing that wanted them. `WPAQS_Report::gather()`
+does it now and the screen calls that, so the console reads the same answer by the same
+route. Two routes to one question is how a finding shown here stops matching the
+finding shown there.
+
+The export is deliberately narrow. This data is more sensitive than the sibling's —
+logins, email addresses, the addresses people sign in from — and those are the point: a
+console hiding them could not answer the question it exists for. What never leaves is
+what would let somebody *become* an account rather than recognise it: the password
+hash, session tokens, and the raw activation key behind a pending reset. That finding
+carries when the reset was requested, which is the part a person can act on.
+
+**Enrolment waits for a person**, and the verification route returns a hash of the
+install nonce rather than the nonce, because that route is public and the nonce is what
+collects the key.
+
+**The rule that shared files may not drift is now a test.** `test-shared.php` compares
+hashes with the plugin prefix and directory normalised away, and both plugins carry the
+same list, so a shared file changed in one repository fails that repository's own
+build.
+
+665 assertions, up from 623.
+
 ## 0.8.0
 
 **Nothing here changes what the plugin does**, and unlike the sibling not one visible
