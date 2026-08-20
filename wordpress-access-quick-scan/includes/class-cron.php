@@ -22,8 +22,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class WPAQS_Cron {
 
-	/** The scheduled event. */
+	/** The daily report. */
 	const HOOK = 'wpaqs_daily_report';
+
+	/** Enrolment, which waits on a person and so asks more often. */
+	const FLEET_HOOK = 'wpaqs_fleet_check';
 
 	/**
 	 * Register the handler.
@@ -34,6 +37,7 @@ class WPAQS_Cron {
 	 */
 	public static function register() {
 		add_action( self::HOOK, array( __CLASS__, 'run' ) );
+		add_action( self::FLEET_HOOK, array( __CLASS__, 'keep_up_with_fleet' ) );
 	}
 
 	/**
@@ -51,6 +55,13 @@ class WPAQS_Cron {
 		}
 
 		wp_schedule_event( self::next_run(), 'daily', self::HOOK );
+
+		// Hourly, and separate from the report. Enrolment waits on a person, and asking
+		// once a day means a site approved five minutes after its daily run waits most of
+		// another day to find out — which reads as approving having not worked.
+		if ( ! wp_next_scheduled( self::FLEET_HOOK ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'hourly', self::FLEET_HOOK );
+		}
 	}
 
 	/**
@@ -60,6 +71,7 @@ class WPAQS_Cron {
 	 */
 	public static function unschedule() {
 		wp_clear_scheduled_hook( self::HOOK );
+		wp_clear_scheduled_hook( self::FLEET_HOOK );
 	}
 
 	/**
@@ -117,8 +129,21 @@ class WPAQS_Cron {
 	 *
 	 * @return void
 	 */
-	private static function keep_up_with_fleet() {
-		if ( ! class_exists( 'WPAQS_Fleet' ) || WPAQS_Fleet::enrolled() ) {
+	public static function keep_up_with_fleet() {
+		if ( ! class_exists( 'WPAQS_Fleet' ) ) {
+			return;
+		}
+
+		// Enrolled and never having reported: the site was approved after its daily run,
+		// and waiting for the next one would leave the console showing a site it has
+		// heard nothing from.
+		if ( WPAQS_Fleet::enrolled() ) {
+			$state = WPAQS_Fleet::state();
+
+			if ( empty( $state['pushed_at'] ) ) {
+				self::report_to_fleet_if_enrolled();
+			}
+
 			return;
 		}
 

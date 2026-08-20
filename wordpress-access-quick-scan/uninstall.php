@@ -37,3 +37,4 @@ delete_option( 'wpaqs_fleet' );
 
 // The only event this plugin ever schedules.
 wp_clear_scheduled_hook( 'wpaqs_daily_report' );
+wp_clear_scheduled_hook( 'wpaqs_fleet_check' );

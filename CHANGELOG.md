@@ -3,6 +3,26 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.4
+
+**A site could enrol and then silently drop out of the fleet.** Enrolment rode on the
+scan's own cron event, and `reschedule()` clears that event when somebody turns the
+daily scan off. A site with the schedule disabled would never enrol — or would stop
+reporting if it already had — and in the console that reads as a site nobody has heard
+from, which is indistinguishable from one where the plugin was never installed.
+
+Whether a site scans on a schedule and whether it belongs to a fleet are two different
+questions, and one was answering the other. Enrolment now has its own event, scheduled
+unconditionally.
+
+**It runs hourly rather than daily, and that is about waiting rather than cost.** Both
+things it does are waiting on something: a person approving, and a report a manual scan
+may have produced. Asking once a day meant a site approved five minutes after its daily
+run waited most of another day to find out — which reads as approving having not worked.
+
+**A report the console never saw is now sent.** A site enrolled after a scan had already
+run held a report nobody received, and the console showed it as never having reported.
+
 ## 0.8.3
 
 **A manual scan reports too, and there is a button that does not wait for the
