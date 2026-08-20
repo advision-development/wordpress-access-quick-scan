@@ -98,6 +98,7 @@ class WPAQS_Admin_Page {
 			<?php self::render_code_holders( $accounts ); ?>
 			<?php self::render_accounts( $accounts, $sessions ); ?>
 			<?php self::render_passwords( $accounts, $passwords ); ?>
+			<?php WPAQS_Fleet_Panel::render(); ?>
 			<?php self::render_coverage(); ?>
 		</div>
 		<?php
