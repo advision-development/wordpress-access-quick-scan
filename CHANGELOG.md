@@ -3,6 +3,21 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.2
+
+**A panel on the screen, and a button that does not wait for tomorrow.** Enrolment
+happened on the daily run and nowhere else, so a site that had asked, been refused, and
+would ask again looked exactly like a site that had never tried. Four states reading
+the same is the fault this plugin keeps finding in other people's screens.
+
+The panel names which of them it is — never asked, waiting for somebody to approve,
+enrolled and yet to report, enrolled and reporting — and carries **Ask to enrol** or
+**Check now** depending. Pressing Check now ignores the interval that stops the daily
+run hammering the console: somebody watching a screen is allowed to ask again.
+
+The last error stays visible after a success, because a site that is enrolled but whose
+last report failed is not a site with nothing to say.
+
 ## 0.8.1
 
 **This plugin reports to a fleet console, and three things it never did before are now
