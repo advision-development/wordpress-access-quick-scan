@@ -122,6 +122,20 @@ class WPAQS_Cron {
 	}
 
 	/**
+	 * Always 0: there is no stored report here, and that is not a gap.
+	 *
+	 * The shared fleet panel uses this to warn about a scan the console has not been
+	 * given. This plugin reads live state, so the read and the send are one act — there
+	 * is never a finished report sitting unsent, and answering with anything else would
+	 * make the panel warn about a scan that does not exist.
+	 *
+	 * @return int
+	 */
+	public static function last_report_finished() {
+		return 0;
+	}
+
+	/**
 	 * Ask to enrol, or ask whether the request was approved yet.
 	 *
 	 * Enrolment waits on a person, so this is the site checking back rather than

@@ -88,7 +88,7 @@ class WPAQS_Fleet {
 	public static function forget() {
 		$state = self::state();
 
-		foreach ( array( 'key', 'enrolled_at', 'requested_at', 'polled_at', 'pushed_at' ) as $gone ) {
+		foreach ( array( 'key', 'enrolled_at', 'requested_at', 'polled_at', 'pushed_at', 'pushed_run', 'pushed_finished' ) as $gone ) {
 			unset( $state[ $gone ] );
 		}
 
@@ -261,12 +261,20 @@ class WPAQS_Fleet {
 
 		$changes = array( 'last_error' => $response['error'] );
 
+		// What the report described, so the screen can name it. "Last report sent 13
+		// hours ago" beside "last completed scan 6:02 am" is two renderings of one
+		// moment, in different formats, and reads as two moments — which is how a
+		// working site gets reported as one that scanned and did not send.
+		$finished = isset( $record['completed_at'] ) ? (int) $record['completed_at'] : 0;
+
 		// Only on success. It used to record every attempt, which made a site whose
 		// first push failed look like a site that had reported — and the fleet check
 		// asks exactly that question before deciding whether to retry, so one failed
 		// attempt meant the report was never sent again.
 		if ( '' === $response['error'] ) {
-			$changes['pushed_at'] = time();
+			$changes['pushed_at']       = time();
+			$changes['pushed_run']      = (string) $run_id;
+			$changes['pushed_finished'] = $finished;
 		}
 
 		self::remember( $changes );

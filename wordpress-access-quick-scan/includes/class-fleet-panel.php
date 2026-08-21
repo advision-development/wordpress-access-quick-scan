@@ -171,16 +171,43 @@ class WPAQS_Fleet_Panel {
 			echo '<p>' . esc_html__( 'This site is enrolled and reports after every scheduled scan.', 'wpaqs' ) . '</p>';
 
 			if ( ! empty( $state['pushed_at'] ) ) {
-				printf(
-					'<p>%s</p>',
-					esc_html(
-						sprintf(
-							/* translators: %s: how long ago the last report was sent. */
-							__( 'Last report sent %s ago.', 'wpaqs' ),
-							human_time_diff( (int) $state['pushed_at'] )
+				$sent     = (int) $state['pushed_at'];
+				$describes = isset( $state['pushed_finished'] ) ? (int) $state['pushed_finished'] : 0;
+
+				// Names what was sent rather than only when. The two lines this screen
+				// already carried — "sent 13 hours ago" and "last completed scan 6:02
+				// am" — are one moment rendered twice, relative in one place and
+				// absolute in the other, and a reader has to do arithmetic across two
+				// formats to find that out. Reported as "the job ran but did not send",
+				// which is the correct thing to conclude from what it said.
+				if ( $describes > 0 ) {
+					printf(
+						'<p>%s</p>',
+						esc_html(
+							sprintf(
+								/* translators: 1: how long ago the report was sent. 2: when the scan it described finished. */
+								__( 'Last report sent %1$s ago — the scan that finished %2$s.', 'wpaqs' ),
+								human_time_diff( $sent ),
+								self::site_time( $describes )
+							)
 						)
-					)
-				);
+					);
+				} else {
+					// Nothing stored to describe: this plugin reads live state, so the
+					// read and the send are one act and there is no scan to name.
+					printf(
+						'<p>%s</p>',
+						esc_html(
+							sprintf(
+								/* translators: %s: how long ago the last report was sent. */
+								__( 'Last report sent %s ago — a live read of the site at that moment.', 'wpaqs' ),
+								human_time_diff( $sent )
+							)
+						)
+					);
+				}
+
+				self::unsent( $describes );
 			} else {
 				// Enrolled and never having reported is its own state: the next scan will
 				// send, and saying nothing here would read as a failure.
@@ -251,6 +278,59 @@ class WPAQS_Fleet_Panel {
 			esc_html( $messages[ $key ] ),
 			'' === $why ? '' : ' ' . esc_html( $why )
 		);
+	}
+
+	/**
+	 * A scan the console has not been given.
+	 *
+	 * The state the reader was actually worried about, and the one the screen had no
+	 * words for: a scan finished, its push failed, and the panel went on saying when the
+	 * *previous* report was sent. Nothing distinguished that from a site up to date.
+	 *
+	 * It resolves itself — `pushed_at` records only a send that worked, so the hourly
+	 * fleet check retries — and saying so is the difference between a screen reporting a
+	 * problem and a screen reporting a problem somebody has to act on.
+	 *
+	 * @param int $described When the scan the last report described finished.
+	 * @return void
+	 */
+	private static function unsent( $described ) {
+		$cron = strtoupper( self::prefix() ) . '_Cron';
+
+		if ( ! is_callable( array( $cron, 'last_report_finished' ) ) ) {
+			return;
+		}
+
+		$latest = (int) call_user_func( array( $cron, 'last_report_finished' ) );
+
+		if ( $latest <= $described ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-warning inline"><p>%s</p></div>',
+			esc_html(
+				sprintf(
+					/* translators: %s: when the unsent scan finished. */
+					__( 'The scan that finished %s has not reached the console. The hourly fleet check will try again, or send one now.', 'wpaqs' ),
+					self::site_time( $latest )
+				)
+			)
+		);
+	}
+
+	/**
+	 * A stored UTC timestamp as the site's own clock shows it.
+	 *
+	 * Matched to the rest of the screen deliberately. This panel sits beside a card
+	 * printing "Last completed scan: August 21, 2026 6:02 am" in site time, and the same
+	 * moment in two zones is the fault this change exists to remove, not to move.
+	 *
+	 * @param int $timestamp UTC timestamp.
+	 * @return string
+	 */
+	private static function site_time( $timestamp ) {
+		return wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $timestamp );
 	}
 
 	/**

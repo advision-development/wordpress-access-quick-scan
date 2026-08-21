@@ -659,5 +659,47 @@ check(
 	'it used to sit between the application passwords and the coverage list'
 );
 
+// ------------------------------------------------------- what the fleet panel says
+
+// Reported from a real site: the panel said "Last report sent 13 hours ago" while the
+// card beside it said "Last completed scan: 6:02 am", and the reader concluded the job
+// had run and not sent. Both were the same moment, rendered relative in one place and
+// absolute in the other, in different formats.
+$panel = code_only( file_get_contents( dirname( __DIR__ ) . '/wordpress-access-quick-scan/includes/class-fleet-panel.php' ) );
+
+check(
+	'the panel names the scan the last report described, not only when it was sent',
+	false !== strpos( $panel, "the scan that finished %2\$s" ),
+	'a relative age on its own is what a reader has to do arithmetic against'
+);
+
+check(
+	'and says so differently when there was no scan behind the report',
+	false !== strpos( $panel, 'a live read of the site at that moment' ),
+	'naming a finish time for something that never finished is worse than naming nothing'
+);
+
+// The state the screen had no words for at all: a scan finished, the push failed, and
+// the panel went on reporting when the *previous* report was sent.
+check(
+	'the panel warns about a scan the console has not been given',
+	false !== strpos( $panel, 'private static function unsent(' )
+		&& false !== strpos( $panel, 'self::unsent(' ),
+	'a defined-but-uncalled warning is the fault this plugin exists to report'
+);
+
+check(
+	'and says it resolves itself, because it does',
+	false !== strpos( $panel, 'hourly fleet check will try again' ),
+	'a problem nobody has to act on must not read like one that needs acting on'
+);
+
+// The same moment in two zones is the fault this change removes, not moves.
+check(
+	'the panel prints times on the site\'s own clock, in the screen\'s own format',
+	false !== strpos( $panel, "wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' )" ),
+	'a UTC timestamp beside a site-local one is the original bug with an extra step'
+);
+
 printf( "\n%d failure(s)\n", $GLOBALS['wpaqs_failures'] );
 exit( $GLOBALS['wpaqs_failures'] > 0 ? 1 : 0 );
