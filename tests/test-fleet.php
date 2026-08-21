@@ -11,7 +11,7 @@
 
 define( 'ABSPATH', sys_get_temp_dir() . '/wpaqs-fleet-test/' );
 define( 'WPAQS_DIR', ABSPATH );
-define( 'WPAQS_VERSION', '0.8.5' );
+define( 'WPAQS_VERSION', '0.8.6' );
 
 $failures = 0;
 
@@ -190,7 +190,7 @@ $body = json_decode( $post['args']['body'], true );
 check( 'an enrolled site reports', false !== strpos( $post['url'], '/ingest' ) );
 check( 'and carries the run id', 'run-1' === $body['scanRunId'] );
 check( 'and the findings from the export', 1 === count( $body['findings'] ) );
-check( 'and the plugin version', '0.8.5' === $body['pluginVersion'] );
+check( 'and the plugin version', '0.8.6' === $body['pluginVersion'] );
 
 // ------------------------------------------------- what must never be in a request
 
@@ -323,6 +323,52 @@ $GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
 $GLOBALS['reply']                  = array( 'wp_error' => true );
 WPAQS_Fleet::push( array( 'findings' => array() ), 'run-1' );
 check( 'a console that cannot be reached leaves the site enrolled', WPAQS_Fleet::enrolled() );
+
+// ------------------------------------------------ what the last report described
+
+// The state the screen had no words for. "Last report sent 13 hours ago" beside "last
+// completed scan 6:02 am" is one moment rendered twice, relative in one place and
+// absolute in the other — reported as "the job ran but did not send", which is the
+// correct thing to conclude from what it said. The panel can only name what was sent if
+// the transport records it.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+WPAQS_Fleet::push( array( 'findings' => array(), 'completed_at' => 1787000000 ), 'run-7' );
+$state = WPAQS_Fleet::state();
+check( 'a push records which scan it described', 1787000000 === $state['pushed_finished'] );
+check( 'and which run it was', 'run-7' === $state['pushed_run'] );
+
+// A live read has no scan to name, and inventing one would have the panel print a
+// finish time for something that never finished.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+WPAQS_Fleet::push( array( 'findings' => array() ), 'run-8' );
+$state = WPAQS_Fleet::state();
+check( 'a report with no scan behind it records no finish time', 0 === $state['pushed_finished'] );
+
+// A failed push must not claim to have described anything, or the panel names a scan the
+// console was never given.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+$GLOBALS['reply']                  = array( 'code' => 500, 'body' => array( 'error' => 'boom' ) );
+WPAQS_Fleet::push( array( 'findings' => array(), 'completed_at' => 1787000000 ), 'run-9' );
+$state = WPAQS_Fleet::state();
+check( 'a failed push records no scan either', ! isset( $state['pushed_finished'] ) );
+
+// Forgetting has to drop these too. A re-enrolled site carrying them would claim to have
+// sent a report the console has never seen, which is the original fault with a new cause.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array(
+	'key'             => 'a-key',
+	'pushed_at'       => 100,
+	'pushed_run'      => 'run-1',
+	'pushed_finished' => 90,
+	'install_nonce'   => 'the-install',
+);
+$GLOBALS['reply'] = array( 'code' => 401, 'body' => array( 'error' => 'unauthenticated' ) );
+WPAQS_Fleet::push( array( 'findings' => array() ), 'run-10' );
+$state = WPAQS_Fleet::state();
+check( 'forgetting drops what was sent as well as the key', ! isset( $state['pushed_run'] ) && ! isset( $state['pushed_finished'] ) );
 
 printf( "\n%d failure(s)\n", $failures );
 exit( $failures > 0 ? 1 : 0 );

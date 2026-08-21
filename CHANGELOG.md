@@ -3,6 +3,34 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.6
+
+**"Last report sent 13 hours ago" beside "Last completed scan: 6:02 am" was read as a
+site that scanned and did not send.** Reported from a real install, and the correct thing
+to conclude from what the screen said. Both lines were the same moment — rendered
+relative in one place and absolute in the other, in different formats — so finding out
+they agreed meant doing arithmetic across two zones and two notations.
+
+The panel names what it sent now: *"Last report sent 13 hours ago — the scan that
+finished August 21, 2026 6:02 am."* On the site's own clock, in the screen's own format,
+because the same moment in two zones is the fault being removed rather than moved.
+This plugin reads live state, so there is no scan to name and the panel
+says *"a live read of the site at that moment"*. `last_report_finished()` returns 0 here
+deliberately: the read and the send are one act, there is never a finished report sitting
+unsent, and any other answer would make the panel warn about a scan that does not
+exist.
+
+**And the state the screen had no words for at all is now one of them.** A scan that
+finished after the last successful push is a scan the console has not been given, and the
+panel used to go on reporting when the *previous* report was sent — indistinguishable
+from a site that is up to date. It says so, and says the hourly fleet check will try
+again, because a problem nobody has to act on must not read like one that does.
+
+`push()` records which scan a report described and which run it was, on success only. A
+failed push recording it would have the panel name a scan the console was never given,
+which is the original fault with a new cause. Forgetting a revoked enrolment drops both,
+for the same reason.
+
 ## 0.8.5
 
 **A site that joined the fleet then sat silent until the next scheduled run.** The
