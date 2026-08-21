@@ -5,33 +5,27 @@ left. Ordered by what blocks what, not by size.
 
 The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated here.
 
-**Last reviewed:** 2026-08-20
+**Last reviewed:** 2026-08-21
 
 ---
 
 ## 1. Blocks installing this anywhere else
 
-### This is not released
+### Nothing, as of 2026-08-21
 
-| | |
-|---|---|
-| plugin header | **0.8.5** |
-| latest GitHub release | **0.7.1** |
-
-The updater installs from GitHub Releases, and `release.yml` asserts the tag equals the
-header. Nothing has been tagged since 0.7.1, so **every site that auto-updates today
-installs a build with no fleet transport in it** — and it reports nothing while looking
-installed and current, which is the failure mode this whole project exists to remove.
+Header and published release both read **0.8.6**. They must stay that way: the updater
+serves the release zip, so a merge without a tag leaves every site on the previous build
+while every screen says they are current. That happened once and cost five versions.
 
 ```
 ./build.sh
-git tag v0.8.5 && git push origin v0.8.5
+git tag v0.8.6 && git push origin v0.8.6
 ```
 
 Both plugins are released together. A fleet running one half of the pair reports half a
 site, and the console shows the missing half as a plugin that was never installed.
 
-### Auto-update is decided but not implemented
+### Auto-update is decided but not implemented### Auto-update is decided but not implemented
 
 `WPAQS_Updater::never_automatically()` and `explain_no_auto_update()` still return the old
 policy: a person presses every update. `CLAUDE.md` records why that is being reversed for
