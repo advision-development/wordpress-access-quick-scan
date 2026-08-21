@@ -13,13 +13,13 @@ The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated h
 
 ### Nothing, as of 2026-08-21
 
-Header and published release both read **0.8.6**. They must stay that way: the updater
+Header and published release both read **0.8.7**. They must stay that way: the updater
 serves the release zip, so a merge without a tag leaves every site on the previous build
 while every screen says they are current. That happened once and cost five versions.
 
 ```
 ./build.sh
-git tag v0.8.6 && git push origin v0.8.6
+git tag v0.8.7 && git push origin v0.8.7
 ```
 
 Both plugins are released together. A fleet running one half of the pair reports half a

@@ -38,6 +38,21 @@ class WPAQS_Cron {
 	public static function register() {
 		add_action( self::HOOK, array( __CLASS__, 'run' ) );
 		add_action( self::FLEET_HOOK, array( __CLASS__, 'keep_up_with_fleet' ) );
+
+		/*
+		 * On every load, not only on activation — and that is the fix for a real fault.
+		 *
+		 * WordPress does not run the activation hook when a plugin is *updated*. A site
+		 * that already had this plugin active and received the fleet version by update
+		 * therefore never scheduled these events: it never asked to enrol, never reported,
+		 * and its own panel said it had not asked to join a fleet. Meanwhile the console
+		 * showed nothing at all, which is indistinguishable from the plugin never having
+		 * been installed — the exact confusion this project exists to remove.
+		 *
+		 * Cheap enough to do unconditionally: wp_next_scheduled() reads the cron option,
+		 * which WordPress has already loaded.
+		 */
+		add_action( 'init', array( __CLASS__, 'schedule' ) );
 	}
 
 	/**

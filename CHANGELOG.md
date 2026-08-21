@@ -3,6 +3,32 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.7
+
+**A site that received this plugin as an *update* never joined the fleet.**
+`register_activation_hook` does not run when WordPress updates a plugin, and the fleet
+event was scheduled only from there. So a site that already had this plugin active and got
+the fleet version by update never scheduled it: it never asked to enrol, never reported,
+and its own panel said it had not asked to join a fleet console — while the console showed
+nothing at all, which is indistinguishable from the plugin never having been installed.
+
+Reported as *"I installed it on several sites and no enrolment request has arrived"*, which
+is the correct thing to conclude from what both screens said.
+
+The schedule is ensured on `init` now as well as on activation. It is idempotent —
+`wp_next_scheduled()` reads the cron option WordPress has already loaded — so a site that
+was updated heals itself on its next page load, without anybody deactivating anything.
+
+**And a 2xx answer is no longer taken as success on its own.** Every path under the
+console's prefix that is not a function is rewritten to its single-page app, which answers
+`200` with HTML. One wrong character in a path, a rewrite dropped from a deploy, or an
+endpoint renamed on the far side, and this plugin would have recorded success on every
+request while the console received nothing. A firewall's block page does the same thing.
+
+Every endpoint answers JSON, so anything else did not come from them. The transport says so
+and quotes the first of what it got instead — found by mistyping a path by one letter and
+receiving `200 <!doctype html>`.
+
 ## 0.8.6
 
 **"Last report sent 13 hours ago" beside "Last completed scan: 6:02 am" was read as a

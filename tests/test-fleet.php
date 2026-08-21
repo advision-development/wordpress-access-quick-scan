@@ -11,7 +11,7 @@
 
 define( 'ABSPATH', sys_get_temp_dir() . '/wpaqs-fleet-test/' );
 define( 'WPAQS_DIR', ABSPATH );
-define( 'WPAQS_VERSION', '0.8.6' );
+define( 'WPAQS_VERSION', '0.8.7' );
 
 $failures = 0;
 
@@ -88,6 +88,12 @@ function wp_remote_retrieve_response_code( $response ) {
 }
 
 function wp_remote_retrieve_body( $response ) {
+	// `html` sends bytes through untouched, which is what a rewrite to a single-page app
+	// or a firewall's block page actually does.
+	if ( isset( $response['html'] ) ) {
+		return $response['html'];
+	}
+
 	return json_encode( isset( $response['body'] ) ? $response['body'] : array() );
 }
 
@@ -190,7 +196,7 @@ $body = json_decode( $post['args']['body'], true );
 check( 'an enrolled site reports', false !== strpos( $post['url'], '/ingest' ) );
 check( 'and carries the run id', 'run-1' === $body['scanRunId'] );
 check( 'and the findings from the export', 1 === count( $body['findings'] ) );
-check( 'and the plugin version', '0.8.6' === $body['pluginVersion'] );
+check( 'and the plugin version', '0.8.7' === $body['pluginVersion'] );
 
 // ------------------------------------------------- what must never be in a request
 
@@ -369,6 +375,35 @@ $GLOBALS['reply'] = array( 'code' => 401, 'body' => array( 'error' => 'unauthent
 WPAQS_Fleet::push( array( 'findings' => array() ), 'run-10' );
 $state = WPAQS_Fleet::state();
 check( 'forgetting drops what was sent as well as the key', ! isset( $state['pushed_run'] ) && ! isset( $state['pushed_finished'] ) );
+
+// ------------------------------------------- a 2xx is not success on its own
+
+// Every path under the console's prefix that is not a function is rewritten to its
+// single-page app, which answers 200 with HTML. One wrong character in a path, a rewrite
+// dropped from a deploy, or an endpoint renamed on the far side, and this plugin would
+// record success on every request while the console received nothing. A firewall's block
+// page does the same.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+$GLOBALS['reply']                   = array( 'code' => 200, 'html' => '<!doctype html><html lang="en"><head>' );
+$result = WPAQS_Fleet::push( array( 'findings' => array() ), 'run-1' );
+check( 'HTML with a 200 is not a successful push', '' !== $result['error'] );
+check( 'and the answer is quoted back', false !== strpos( $result['error'], '<!doctype html>' ), $result['error'] );
+
+$state = WPAQS_Fleet::state();
+check( 'so it does not claim the report was sent', empty( $state['pushed_at'] ) );
+
+// An empty 200 is the same fault with less to show for it.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+$GLOBALS['reply']                   = array( 'code' => 200, 'html' => '' );
+check( 'an empty body with a 200 is not success either', '' !== WPAQS_Fleet::push( array( 'findings' => array() ), 'run-2' )['error'] );
+
+// And a refusal still reads its reason out of JSON when there is JSON to read.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
+$GLOBALS['reply']                   = array( 'code' => 400, 'body' => array( 'error' => 'bad-body' ) );
+check( 'a JSON refusal still names its reason', false !== strpos( WPAQS_Fleet::push( array( 'findings' => array() ), 'run-3' )['error'], 'bad-body' ) );
 
 printf( "\n%d failure(s)\n", $failures );
 exit( $failures > 0 ? 1 : 0 );

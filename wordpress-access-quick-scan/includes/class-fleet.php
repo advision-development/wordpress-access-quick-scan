@@ -326,16 +326,38 @@ class WPAQS_Fleet {
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
-		$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
-		$body = is_array( $body ) ? $body : array();
+		$raw  = (string) wp_remote_retrieve_body( $response );
+		$body = json_decode( $raw, true );
 
 		if ( $code < 200 || $code > 299 ) {
-			$reason = isset( $body['error'] ) ? (string) $body['error'] : (string) $code;
+			$reason = is_array( $body ) && isset( $body['error'] ) ? (string) $body['error'] : (string) $code;
 
 			return array(
 				/* translators: %s: the reason the console gave. */
 				'error' => sprintf( __( 'The fleet console refused this: %s', 'wpaqs' ), $reason ),
-				'body'  => $body,
+				'body'  => is_array( $body ) ? $body : array(),
+				'code'  => $code,
+			);
+		}
+
+		/*
+		 * A 2xx is not success on its own, and treating it as one is how this fails
+		 * silently. Every path under the console's prefix that is not a function is
+		 * rewritten to its single-page app, which answers 200 with HTML — so one wrong
+		 * character in a path, a rewrite dropped from a deploy, or an endpoint renamed on
+		 * the far side would leave this plugin recording success on every request while
+		 * the console received nothing. A firewall's block page does the same.
+		 *
+		 * Every endpoint here answers JSON. Anything else did not come from them.
+		 */
+		if ( ! is_array( $body ) ) {
+			return array(
+				/* translators: %s: the first characters of what the server sent instead. */
+				'error' => sprintf(
+					__( 'The fleet console answered, but not with JSON: %s', 'wpaqs' ),
+					trim( preg_replace( '~\s+~', ' ', substr( $raw, 0, 80 ) ) )
+				),
+				'body'  => array(),
 				'code'  => $code,
 			);
 		}
