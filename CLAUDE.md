@@ -202,6 +202,17 @@ A site with no key cannot report at all, rather than posting something nobody co
 attribute, and a console that cannot be reached records the error and stops. The scan
 already did its work and the report is already on the site.
 
+**Recording an attempt as though it were a success is this codebase's recurring fault, and
+it has now appeared twice in the same file.** `push()` wrote `pushed_at` on every attempt,
+so a site whose first push failed looked like one that had reported — fixed in 0.28.6.
+`enrol()` writes `requested_at` on every attempt, so a site whose first enrolment failed
+switches permanently to polling an enrolment that was never created, and the console
+answering `no-enrolment` changes nothing. **Not fixed** — see `WPSEC-PENDING.md`.
+
+The shape to watch for: a timestamp named for the *event* being written next to the error
+that says the event did not happen. If a field means "this happened", it is written only
+where it happened.
+
 **`pushed_at` means sent, not attempted, and a 401 un-enrols.** Both were faults. The
 first recorded every attempt, so a site whose push failed looked like one that had
 reported — and the fleet check asks exactly that before deciding whether to retry, so a
