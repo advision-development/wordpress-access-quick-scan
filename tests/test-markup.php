@@ -701,5 +701,34 @@ check(
 	'a UTC timestamp beside a site-local one is the original bug with an extra step'
 );
 
+// ------------------------------------------ the fleet event survives an update
+
+// WordPress does not run the activation hook when a plugin is *updated*. A site that
+// already had this plugin active and received the fleet version by update therefore never
+// scheduled the event: it never asked to enrol, never reported, and its own panel said it
+// had not asked to join a fleet — while the console showed nothing at all, which is
+// indistinguishable from the plugin never having been installed.
+//
+// Read from code only. The comment explaining the fix names the hook it registers.
+$cron_code = code_only( file_get_contents( dirname( __DIR__ ) . '/wordpress-access-quick-scan/includes/class-cron.php' ) );
+
+check(
+	'the fleet schedule is ensured on every load, not only on activation',
+	false !== strpos( $cron_code, "add_action( 'init', array( __CLASS__, 'schedule' ) )" ),
+	'an activation-only schedule never reaches a site that was updated rather than installed'
+);
+
+check(
+	'and it is still scheduled on activation',
+	false !== strpos( code_only( file_get_contents( dirname( __DIR__ ) . '/wordpress-access-quick-scan/wordpress-access-quick-scan.php' ) ), 'schedule()' ),
+	'a fresh install must not wait for its first page load'
+);
+
+check(
+	'scheduling is idempotent, because it now runs on every request',
+	false !== strpos( $cron_code, 'wp_next_scheduled' ),
+	'without the guard this would replace the event on every page load and it would never fire'
+);
+
 printf( "\n%d failure(s)\n", $GLOBALS['wpaqs_failures'] );
 exit( $GLOBALS['wpaqs_failures'] > 0 ? 1 : 0 );

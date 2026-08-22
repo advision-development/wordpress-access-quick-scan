@@ -223,6 +223,20 @@ panel used to sit between the application passwords and the coverage list. `test
 reads the render block with comments stripped — the comment explaining the order names
 the sections it orders, so an assertion reading the source would pass on the comment.
 
+**An activation hook does not run on an update.** The fleet event was scheduled only from
+`register_activation_hook`, so a site that already had this plugin active and received the
+fleet version by update never scheduled it — it never asked to enrol, never reported, and
+its own panel said it had not asked to join a fleet, while the console showed nothing at
+all. Two screens agreeing on a lie. Anything a site must have is ensured on `init` as well,
+guarded by `wp_next_scheduled` so it stays idempotent.
+
+**A 2xx is not success.** Every path under the console's prefix that is not a function is
+rewritten to its single-page app, which answers `200` with HTML — so one wrong character in
+a path, a rewrite dropped from a deploy, or an endpoint renamed on the far side would have
+this plugin recording success on every request while nothing arrived. A firewall's block
+page does the same. Every endpoint answers JSON; the transport requires it and quotes what
+it got instead.
+
 **`/wp-json/WPAQS/v1/verify` returns a hash of the install nonce, never the nonce.**
 That route is public and unauthenticated, and the install nonce is what collects the
 key from the console. Returning it would mean anyone able to reach a site could enrol
