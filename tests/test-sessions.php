@@ -147,10 +147,16 @@ check( 'and neither does an empty one', '' === WPAQS_Sessions::network_of( '' ) 
 /**
  * Sessions from a list of addresses, all with an ordinary browser agent.
  *
+ * `$live_until` is passed in rather than reached for. It is a file-scope variable and this
+ * is a function, so the earlier version read an undefined name and every session it built
+ * carried `'expiration' => null` — four assertions that describe live sessions were
+ * exercising the expired path instead, silently, and PHP said so in a warning nobody read.
+ *
  * @param array $addresses Addresses.
+ * @param int   $live_until When these sessions expire.
  * @return array
  */
-function sessions_from( array $addresses ) {
+function sessions_from( array $addresses, $live_until ) {
 	$sessions = array();
 
 	foreach ( $addresses as $address ) {
@@ -170,7 +176,7 @@ $account = array( 'id' => 5, 'login' => 'shared' );
 
 // The benign case, and the reason the threshold is three rather than two: a laptop on an
 // office connection and a phone on mobile data are two networks and entirely ordinary.
-$two = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '198.51.100.4' ) ) );
+$two = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '198.51.100.4' ), $live_until ) );
 
 check(
 	'two networks is silent',
@@ -178,7 +184,7 @@ check(
 	'a laptop and a phone are two networks on a healthy site'
 );
 
-$three = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '198.51.100.4', '192.0.2.7' ) ) );
+$three = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '198.51.100.4', '192.0.2.7' ), $live_until ) );
 
 check( 'three networks is reported', 1 === count( $three ), (string) count( $three ) );
 check( 'at high', 1 === count( $three ) && 'high' === $three[0]['severity'] );
@@ -186,7 +192,7 @@ check( 'and the evidence names them', 1 === count( $three ) && false !== strpos(
 
 // Several addresses on one network are one network: an office with a changing address must
 // not read as somebody signed in from everywhere.
-$same = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '203.0.113.40', '203.0.99.1', '203.0.5.5' ) ) );
+$same = WPAQS_Sessions::findings( $account, sessions_from( array( '203.0.113.9', '203.0.113.40', '203.0.99.1', '203.0.5.5' ), $live_until ) );
 
 check(
 	'many addresses on one network stay one network',
@@ -195,7 +201,7 @@ check(
 );
 
 // A session with no address recorded cannot place anybody anywhere.
-$blank = WPAQS_Sessions::findings( $account, sessions_from( array( '', '', '' ) ) );
+$blank = WPAQS_Sessions::findings( $account, sessions_from( array( '', '', '' ), $live_until ) );
 
 check( 'sessions with no addresses report no networks', array() === $blank );
 
