@@ -3,6 +3,37 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.9.0
+
+**This plugin keeps itself current.** The rule it shipped with was the project's own
+discipline turned on itself: a person presses every update, because the pinned repository
+answers a tampered response and nothing answers a release genuinely published by somebody
+who should not have been able to publish it.
+
+Across a fleet that inverts. Updating 162 sites by hand per release is how the project
+dies, and **an out-of-date scanner reports green** — which is worse than no scanner,
+because a green dashboard is read as an answer.
+
+The compensating control moves to where publishing happens rather than disappearing: 2FA on
+accounts that can publish, a protected environment on the release workflow, and required
+review before publishing. Those are settings on the repository, not code, and this release
+does not create them.
+
+**The toggle is replaced by a sentence, not left in place.** `automatically()` answers the
+filter unconditionally, so the checkbox WordPress would print could be switched off and
+change nothing — a control that looks like it works and does not, which is the fault this
+plugin exists to report rather than commit.
+
+**The way out is a filter**, `wpaqs_auto_update`, so a site that must not take unattended
+updates can refuse from its own mu-plugin. A fleet-wide policy with no way out is a policy
+somebody escapes by editing the plugin.
+
+**And the stub that made the escape hatch testable was itself untestable.** `apply_filters`
+in `tests/wp-stubs.php` returned its value unconditionally, so an assertion that a filter is
+consulted passed whether or not the code consulted it — the hatch could have been deleted
+and every suite would still have agreed it worked. It honours a value the harness plants
+now, and the mutation that stops consulting the filter fails.
+
 ## 0.8.8
 
 **A site that failed its first enrolment never asked again.** One timeout, one DNS blip, one
