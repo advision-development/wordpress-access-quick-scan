@@ -173,12 +173,28 @@ class WPAQS_Fleet {
 			false
 		);
 
-		self::remember(
-			array(
-				'requested_at' => time(),
-				'last_error'   => $response['error'],
-			)
-		);
+		$changes = array( 'last_error' => $response['error'] );
+
+		/*
+		 * Only when the console actually received it.
+		 *
+		 * It was written on every attempt, and that turned one bad minute into a permanent
+		 * state: keep_up_with_fleet() reads this field to decide between asking and
+		 * polling, so a site whose first POST timed out spent the rest of its life polling
+		 * about an enrolment nobody had created. The console answered `no-enrolment` every
+		 * time, correctly, and nothing on either side ever went back to asking.
+		 *
+		 * Deactivating and reactivating does not clear it either — this lives in an option
+		 * and deactivation only clears scheduled hooks — so the usual remedy did nothing,
+		 * which is what made it hard to see.
+		 *
+		 * The same fault as `pushed_at`, fixed in 0.28.6 and left here.
+		 */
+		if ( '' === $response['error'] ) {
+			$changes['requested_at'] = time();
+		}
+
+		self::remember( $changes );
 
 		return array( 'error' => $response['error'] );
 	}
@@ -215,6 +231,26 @@ class WPAQS_Fleet {
 
 		$changes = array( 'polled_at' => time(), 'last_error' => $response['error'] );
 		$status  = isset( $response['body']['status'] ) ? (string) $response['body']['status'] : '';
+		$refused = isset( $response['body']['error'] ) ? (string) $response['body']['error'] : '';
+
+		/*
+		 * The console has no record of this site asking, and says so. That is a fact this
+		 * plugin can act on: ask again.
+		 *
+		 * This is the half that matters, because it repairs sites that are already stuck
+		 * without anybody visiting them. Forgetting the request sends the next fleet check
+		 * back down the enrol branch, and the console has been answering `no-enrolment`
+		 * to those sites for as long as they have been polling — the sentence was always
+		 * there and nothing was listening.
+		 */
+		if ( 'no-enrolment' === $refused ) {
+			$state = self::state();
+
+			unset( $state['requested_at'], $state['polled_at'] );
+			update_option( self::OPTION, array_merge( $state, array( 'last_error' => $response['error'] ) ), false );
+
+			return array( 'error' => $response['error'], 'status' => 'forgotten' );
+		}
 
 		if ( ! empty( $response['body']['key'] ) ) {
 			$changes['key']         = (string) $response['body']['key'];

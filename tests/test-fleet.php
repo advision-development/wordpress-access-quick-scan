@@ -11,7 +11,7 @@
 
 define( 'ABSPATH', sys_get_temp_dir() . '/wpaqs-fleet-test/' );
 define( 'WPAQS_DIR', ABSPATH );
-define( 'WPAQS_VERSION', '0.8.7' );
+define( 'WPAQS_VERSION', '0.8.8' );
 
 $failures = 0;
 
@@ -196,7 +196,7 @@ $body = json_decode( $post['args']['body'], true );
 check( 'an enrolled site reports', false !== strpos( $post['url'], '/ingest' ) );
 check( 'and carries the run id', 'run-1' === $body['scanRunId'] );
 check( 'and the findings from the export', 1 === count( $body['findings'] ) );
-check( 'and the plugin version', '0.8.7' === $body['pluginVersion'] );
+check( 'and the plugin version', '0.8.8' === $body['pluginVersion'] );
 
 // ------------------------------------------------- what must never be in a request
 
@@ -404,6 +404,61 @@ reset_site();
 $GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'a-key' );
 $GLOBALS['reply']                   = array( 'code' => 400, 'body' => array( 'error' => 'bad-body' ) );
 check( 'a JSON refusal still names its reason', false !== strpos( WPAQS_Fleet::push( array( 'findings' => array() ), 'run-3' )['error'], 'bad-body' ) );
+
+// ------------------------------------------ an attempt is not a request
+
+// keep_up_with_fleet() reads `requested_at` to decide between asking and polling, so
+// writing it on a failed attempt turned one bad minute into a permanent state: the site
+// polled for the rest of its life about an enrolment nobody had created, the console
+// answered `no-enrolment` every time, and neither side ever went back to asking.
+// Deactivating and reactivating does not clear it — this lives in an option — so the usual
+// remedy did nothing, which is what made it hard to see.
+reset_site();
+$GLOBALS['reply'] = array( 'wp_error' => true );
+WPAQS_Fleet::enrol();
+check( 'a failed enrolment has not asked', empty( WPAQS_Fleet::state()['requested_at'] ) );
+check( 'and records why', ! empty( WPAQS_Fleet::state()['last_error'] ) );
+
+reset_site();
+$GLOBALS['reply'] = array( 'code' => 500, 'body' => array( 'error' => 'boom' ) );
+WPAQS_Fleet::enrol();
+check( 'a refused enrolment has not asked either', empty( WPAQS_Fleet::state()['requested_at'] ) );
+
+reset_site();
+WPAQS_Fleet::enrol();
+check( 'an enrolment the console received has asked', ! empty( WPAQS_Fleet::state()['requested_at'] ) );
+
+// ------------------------- the console says there is no such enrolment, and it is heard
+
+// The half that repairs sites already stuck, without anybody visiting them. The console has
+// been answering this to those sites for as long as they have been polling; the sentence
+// was always there and nothing was listening.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array(
+	'requested_at'  => 100,
+	'polled_at'     => 100,
+	'install_nonce' => 'the-install',
+);
+$GLOBALS['reply'] = array( 'code' => 404, 'body' => array( 'error' => 'no-enrolment' ) );
+WPAQS_Fleet::poll();
+$state = WPAQS_Fleet::state();
+check( 'a poll answered no-enrolment forgets the request', empty( $state['requested_at'] ) );
+check( 'and forgets when it last polled, so the next check is not rate-limited out', empty( $state['polled_at'] ) );
+check( 'but keeps the install nonce', 'the-install' === $state['install_nonce'] );
+
+// Every other refusal is the console being unhappy with this poll, not saying the site
+// never asked. Forgetting on those would have a site re-enrol over a transient error.
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'requested_at' => 100, 'install_nonce' => 'x' );
+$GLOBALS['reply'] = array( 'code' => 403, 'body' => array( 'error' => 'not-your-enrolment' ) );
+WPAQS_Fleet::poll();
+check( 'another refusal leaves the request standing', ! empty( WPAQS_Fleet::state()['requested_at'] ) );
+
+reset_site();
+$GLOBALS['options']['wpaqs_fleet'] = array( 'requested_at' => 100, 'install_nonce' => 'x' );
+$GLOBALS['reply'] = array( 'wp_error' => true );
+WPAQS_Fleet::poll();
+check( 'a console that cannot be reached leaves it standing too', ! empty( WPAQS_Fleet::state()['requested_at'] ) );
 
 printf( "\n%d failure(s)\n", $failures );
 exit( $failures > 0 ? 1 : 0 );

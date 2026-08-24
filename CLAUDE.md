@@ -207,7 +207,7 @@ it has now appeared twice in the same file.** `push()` wrote `pushed_at` on ever
 so a site whose first push failed looked like one that had reported — fixed in 0.28.6.
 `enrol()` writes `requested_at` on every attempt, so a site whose first enrolment failed
 switches permanently to polling an enrolment that was never created, and the console
-answering `no-enrolment` changes nothing. **Not fixed** — see `WPSEC-PENDING.md`.
+answering `no-enrolment` changes nothing. Fixed in 0.8.8, in two halves: the write is conditional, and a poll answered `no-enrolment` forgets the request so a site already stuck repairs itself.
 
 The shape to watch for: a timestamp named for the *event* being written next to the error
 that says the event did not happen. If a field means "this happened", it is written only

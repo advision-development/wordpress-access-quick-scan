@@ -5,7 +5,7 @@ left. Ordered by what blocks what, not by size.
 
 The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated here.
 
-**Last reviewed:** 2026-08-22
+**Last reviewed:** 2026-08-24
 
 ---
 
@@ -13,82 +13,27 @@ The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated h
 
 ### A site that failed its first enrolment never asks again
 
-**Found 2026-08-21 23:00–00:15, not fixed.** This is the first thing to do on Monday: it is
-the difference between "install and forget" working and not, and it affects every site that
-has ever had a bad minute.
+**Fixed in 0.8.8.** `enrol()` records `requested_at` only when the console received the
+request, and a poll answered `no-enrolment` forgets the request so the next fleet check asks
+again — which repairs sites already stuck without anybody visiting them.
 
-`WPMQS_Fleet::enrol()` / `WPAQS_Fleet::enrol()` record `requested_at` **whether the POST
-succeeded or not**:
+Kept here because the shape recurs and the remedy is not obvious: **a timestamp named for an
+event, written next to the error saying the event did not happen.** It was `pushed_at` in
+0.28.6 and `requested_at` in 0.8.8, both in the same file. If a field means "this happened",
+write it only where it happened.
 
-```php
-$response = self::post( '/enroll', ..., false );
+And the reason it was invisible from both ends: `requested_at` lives in an option, so
+deactivating and reactivating the plugin does not clear it. The usual remedy did nothing.
 
-self::remember( array(
-    'requested_at' => time(),          // ← unconditional
-    'last_error'   => $response['error'],
-) );
-```
+### Nothing, once 0.8.8 is released
 
-One timeout, one DNS blip, one host firewall, one 500 — and `keep_up_with_fleet()` takes the
-other branch for ever:
-
-```php
-if ( empty( $state['requested_at'] ) ) { self::enrol(); return; }
-self::poll();                                   // for an enrolment that was never created
-```
-
-The console answers that poll honestly — `handleEnrolmentStatus` returns **404
-`no-enrolment`** for a domain it has never heard of — and the site records the error and
-polls again on the next check. For ever. Nothing on either side ever goes back to asking.
-
-**Deactivating and reactivating does not clear it.** `requested_at` lives in the
-`wpmqs_fleet` / `wpaqs_fleet` option, and deactivation only clears scheduled hooks. So the
-usual remedy does nothing, which is what made this hard to see.
-
-**It is the same fault as `pushed_at`**, which was fixed in 0.28.6 for exactly this reason —
-recording an attempt as though it were a success. It was fixed in `push()` and left in
-`enrol()`.
-
-#### The fix, in two halves
-
-The second half matters more than the first, because it is what unsticks sites that are
-already stuck without anybody touching them.
-
-1. **`enrol()` records `requested_at` only when the POST succeeded**, the way `push()`
-   records `pushed_at`. A site that could not reach the console has not asked.
-2. **A poll answered `no-enrolment` clears `requested_at`.** The console is stating a fact
-   the site can act on: there is no such enrolment, so asking again is the correct next
-   move. Every site currently stuck heals itself on its next fleet check.
-
-Both halves need assertions that can fail. The shape to copy is the `pushed_at` block in
-`tests/test-fleet.php`.
-
-#### What has not been confirmed
-
-Zero enrol requests reached the console in the three hours after five sites were updated by
-hand and deactivated/reactivated. That is consistent with the bug above, and also with
-WP-Cron never having fired on those sites at all.
-
-**One check on one site settles it.** Open `Tools → Malware Quick Scan` and read the fleet
-panel:
-
-| What it says | Which it is |
-|---|---|
-| *"has asked to enrol and is waiting for somebody to approve it"* | The bug above. `requested_at` is set and the enrolment does not exist |
-| *"has not asked to join a fleet console"* | Cron never ran. `Ask to enrol` will say why in the moment |
-
-Press `Ask to enrol` either way: it is synchronous, it bypasses cron entirely, and it
-reports its own error.
-
-### Nothing, as of 2026-08-21
-
-Header and published release both read **0.8.7**. They must stay that way: the updater
+Header and published release both read **0.8.8**. They must stay that way: the updater
 serves the release zip, so a merge without a tag leaves every site on the previous build
 while every screen says they are current. That happened once and cost five versions.
 
 ```
 ./build.sh
-git tag v0.8.7 && git push origin v0.8.7
+git tag v0.8.8 && git push origin v0.8.8
 ```
 
 Both plugins are released together. A fleet running one half of the pair reports half a

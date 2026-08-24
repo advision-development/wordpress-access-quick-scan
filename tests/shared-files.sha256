@@ -13,7 +13,7 @@
  */
 
 return array(
-	'PLUGIN/includes/class-fleet.php'              => '052627d4071c5a1f8c08d5950ae6fda3057b27db6bd1053bed5832bbcae70065',
+	'PLUGIN/includes/class-fleet.php'              => 'e70e0d754738ada789e9afa522cc6e408992efeab5158f036c956a840f0158a8',
 	'PLUGIN/includes/class-fleet-panel.php'        => 'e12fc1e1f8d6bdf817bf318cede0a920acd6cc353f63a73619fedc9ed1ecb955',
 	'PLUGIN/includes/class-fleet-verify.php'       => '93b90d094e3c4067afcfb61b6b5c58b507b934148754fcfbfee26c1df03e336c',
 	'tests/wp-stubs.php'                           => '20f67dc2afb3bf7f5239330286798a6092c8352dbb2c9fb7fd447193b6c3c592',

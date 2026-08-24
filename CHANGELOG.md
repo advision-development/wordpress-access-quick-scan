@@ -3,6 +3,34 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.8.8
+
+**A site that failed its first enrolment never asked again.** One timeout, one DNS blip, one
+host firewall — and the site spent the rest of its life polling about an enrolment nobody
+had created.
+
+`enrol()` wrote `requested_at` on every attempt, and `keep_up_with_fleet()` reads that field
+to decide between asking and polling. So a single failed POST moved a site permanently onto
+the polling branch. The console answered `no-enrolment` every time, correctly, and neither
+side ever went back to asking.
+
+**Deactivating and reactivating did not clear it.** The field lives in an option and
+deactivation only clears scheduled hooks, so the usual remedy did nothing — which is what
+made this hard to see from either end.
+
+It is the same fault as `pushed_at`, fixed in 0.28.6 for exactly this reason: a timestamp
+named for an event, written next to the error saying the event did not happen. Fixed there
+and left here.
+
+**The half that repairs sites already stuck is the second one.** A poll answered
+`no-enrolment` now forgets the request and when it last polled, so the next fleet check
+takes the enrol branch again. Nobody has to visit the site. The console has been answering
+that sentence to those sites for as long as they have been polling; nothing was listening.
+
+Every other refusal leaves the request standing. A `not-your-enrolment`, a 500 or an
+unreachable console are the console being unhappy with one poll, not saying the site never
+asked — and forgetting on those would have a site re-enrol over a transient error.
+
 ## 0.8.7
 
 **A site that received this plugin as an *update* never joined the fleet.**
