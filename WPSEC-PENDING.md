@@ -5,7 +5,7 @@ left. Ordered by what blocks what, not by size.
 
 The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated here.
 
-**Last reviewed:** 2026-08-24
+**Last reviewed:** 2026-08-24 (after the 0.29.0 / 0.9.0 release)
 
 ---
 
@@ -25,29 +25,46 @@ write it only where it happened.
 And the reason it was invisible from both ends: `requested_at` lives in an option, so
 deactivating and reactivating the plugin does not clear it. The usual remedy did nothing.
 
-### Nothing, once 0.8.8 is released
+### Released and tagged — v0.9.0
 
-Header and published release both read **0.8.8**. They must stay that way: the updater
-serves the release zip, so a merge without a tag leaves every site on the previous build
-while every screen says they are current. That happened once and cost five versions.
+Header and published release both read **0.9.0**, tagged 2026-08-24. The release
+workflow refuses a tag that disagrees with the plugin header, which is the guard that
+exists because a zip once said one version and contained another.
+
+They must stay in step: the updater serves the release zip, so a merge without a tag leaves
+every site on the previous build while every screen says they are current. That happened
+once and cost five versions.
 
 ```
 ./build.sh
-git tag v0.8.8 && git push origin v0.8.8
+git tag v0.9.0 && git push origin v0.9.0
 ```
 
 Both plugins are released together. A fleet running one half of the pair reports half a
 site, and the console shows the missing half as a plugin that was never installed.
+WPMQS 0.29.0 shipped alongside this one.
 
-### Auto-update is decided but not implemented### Auto-update is decided but not implemented
 
-`WPAQS_Updater::never_automatically()` and `explain_no_auto_update()` still return the old
-policy: a person presses every update. `CLAUDE.md` records why that is being reversed for
-this fleet and what replaces it — 2FA on accounts that can publish, a protected
-environment on the release workflow, required review before publishing.
+### Auto-update ships, and the controls that were supposed to come with it do not
 
-**The two functions are replaced together**, or a screen keeps explaining a policy that
-no longer holds. Neither the controls nor the code exist yet.
+**Shipped in 0.9.0 and live on every site that has taken the update.**
+`WPAQS_Updater::automatically()` answers WordPress's `auto_update_plugin` filter with `true`,
+and the escape hatch is the `wpaqs_auto_update` filter.
+
+**This is now the most urgent unfinished thing in either plugin repository, and it is not
+code.** The compensating controls named in `CLAUDE.md` when the reversal was decided still
+do not exist:
+
+- 2FA required on every account that can publish a release
+- a protected `release` environment on the workflow
+- required review before a merge to `main` that a tag can be cut from
+
+Until those are set, **whatever lands in a release runs on 162 sites without anybody
+approving it.** The policy this plugin shipped with — a person presses every update — was
+the control; reversing it moved the control to the repository, and the repository has not
+received it. Nobody can do this from a terminal: they are settings on the GitHub
+repository.
+
 
 ---
 
@@ -76,6 +93,20 @@ Two things settled on the console side that this repo has to match when it lands
 ---
 
 ## 3. Smaller, and not blocking
+
+### Four session assertions do not test what they say they test
+
+`sessions_from()` in `tests/test-sessions.php` read `$live_until` without receiving it — a
+file-scope variable used inside a function — so every session it built carried
+`'expiration' => null`. Four assertions that describe live sessions were exercising the
+expired path instead, and PHP said so in a warning on every run that nobody read.
+
+The variable is passed in now and the warning is gone. **The assertions still pass with the
+sessions forced expired**, which is the part worth recording: they never depended on the
+expiration in the first place, so what looked like a fixture bug is really a gap in
+coverage. Whatever `findings()` does differently for a live session versus an expired one
+is untested from here.
+
 
 - **A removed site recovers on its own**, but only on its next fleet check — up to an
   hour, and longer on a site with no traffic. **WP-Cron only fires on requests**, so
