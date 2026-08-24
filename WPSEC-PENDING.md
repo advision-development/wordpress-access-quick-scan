@@ -5,21 +5,35 @@ left. Ordered by what blocks what, not by size.
 
 The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated here.
 
-**Last reviewed:** 2026-08-21
+**Last reviewed:** 2026-08-24
 
 ---
 
 ## 1. Blocks installing this anywhere else
 
-### Nothing, as of 2026-08-21
+### A site that failed its first enrolment never asks again
 
-Header and published release both read **0.8.7**. They must stay that way: the updater
+**Fixed in 0.8.8.** `enrol()` records `requested_at` only when the console received the
+request, and a poll answered `no-enrolment` forgets the request so the next fleet check asks
+again — which repairs sites already stuck without anybody visiting them.
+
+Kept here because the shape recurs and the remedy is not obvious: **a timestamp named for an
+event, written next to the error saying the event did not happen.** It was `pushed_at` in
+0.28.6 and `requested_at` in 0.8.8, both in the same file. If a field means "this happened",
+write it only where it happened.
+
+And the reason it was invisible from both ends: `requested_at` lives in an option, so
+deactivating and reactivating the plugin does not clear it. The usual remedy did nothing.
+
+### Nothing, once 0.8.8 is released
+
+Header and published release both read **0.8.8**. They must stay that way: the updater
 serves the release zip, so a merge without a tag leaves every site on the previous build
 while every screen says they are current. That happened once and cost five versions.
 
 ```
 ./build.sh
-git tag v0.8.7 && git push origin v0.8.7
+git tag v0.8.8 && git push origin v0.8.8
 ```
 
 Both plugins are released together. A fleet running one half of the pair reports half a

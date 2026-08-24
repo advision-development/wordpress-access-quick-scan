@@ -1,20 +1,20 @@
 # Handoff — the fleet transport
 
-**Last worked:** 2026-08-21
+**Last worked:** 2026-08-24
 **This repo's part:** everything this plugin does to reach the console in `../hawkeye`.
 
 What is still owed is in `WPSEC-PENDING.md`. This file is how it works and why.
 
 ## Status
 
-**Version 0.8.7** on `main` · **697 assertions, 0 failures** · `./build.sh` produces a
+**Version 0.8.8** on `main` · **697 assertions, 0 failures** · `./build.sh` produces a
 zip.
 
 Installed and confirmed working end to end on one site, `wpsec.advision-dev.com`, on
 2026-08-20: the plugin asked to enrol, it was approved in the console, it collected its
 key, it reported, and the report arrived.
 
-**Released as `v0.8.7`**, and the release workflow asserts the tag equals the header before
+**Released as `v0.8.8`**, and the release workflow asserts the tag equals the header before
 it publishes. The updater serves that zip, so the fleet is only as current as the last tag:
 a merge without one leaves 162 sites on the previous build while every screen says they are
 up to date.
