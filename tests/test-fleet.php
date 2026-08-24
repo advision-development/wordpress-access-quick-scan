@@ -11,7 +11,7 @@
 
 define( 'ABSPATH', sys_get_temp_dir() . '/wpaqs-fleet-test/' );
 define( 'WPAQS_DIR', ABSPATH );
-define( 'WPAQS_VERSION', '0.8.8' );
+define( 'WPAQS_VERSION', '0.9.0' );
 
 $failures = 0;
 
@@ -196,7 +196,7 @@ $body = json_decode( $post['args']['body'], true );
 check( 'an enrolled site reports', false !== strpos( $post['url'], '/ingest' ) );
 check( 'and carries the run id', 'run-1' === $body['scanRunId'] );
 check( 'and the findings from the export', 1 === count( $body['findings'] ) );
-check( 'and the plugin version', '0.8.8' === $body['pluginVersion'] );
+check( 'and the plugin version', '0.9.0' === $body['pluginVersion'] );
 
 // ------------------------------------------------- what must never be in a request
 

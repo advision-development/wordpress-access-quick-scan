@@ -75,10 +75,10 @@ class WPAQS_Updater {
 		add_filter( 'plugins_api', array( __CLASS__, 'details' ), 10, 3 );
 		add_action( 'upgrader_process_complete', array( __CLASS__, 'forget' ), 10, 2 );
 
-		// Offered, never applied unattended. See never_automatically() for why this is the one
+		// Applied unattended, and see automatically() for the reasoning and the way out.
 		// risk the pinning cannot reduce.
-		add_filter( 'auto_update_plugin', array( __CLASS__, 'never_automatically' ), 10, 2 );
-		add_filter( 'plugin_auto_update_setting_html', array( __CLASS__, 'explain_no_auto_update' ), 10, 2 );
+		add_filter( 'auto_update_plugin', array( __CLASS__, 'automatically' ), 10, 2 );
+		add_filter( 'plugin_auto_update_setting_html', array( __CLASS__, 'explain_auto_update' ), 10, 2 );
 		add_action( 'admin_post_' . self::CHECK_ACTION, array( __CLASS__, 'handle_check' ) );
 	}
 
@@ -110,15 +110,24 @@ class WPAQS_Updater {
 	 * @param mixed     $item   The plugin being considered.
 	 * @return bool|null
 	 */
-	public static function never_automatically( $update, $item ) {
+	public static function automatically( $update, $item ) {
 		$file = self::basename();
 
 		if ( is_object( $item ) && isset( $item->plugin ) && $file === $item->plugin ) {
-			return false;
+			/**
+			 * Filter whether this plugin updates itself unattended.
+			 *
+			 * The escape hatch, and it is code rather than a checkbox on purpose — see
+			 * `explain_auto_update()` for why the checkbox is gone. A site that must not
+			 * take unattended updates returns false here from its own mu-plugin.
+			 *
+			 * @param bool $auto Whether to update unattended.
+			 */
+			return (bool) apply_filters( 'wpaqs_auto_update', true );
 		}
 
 		// Not ours. Handing back what arrived leaves every other plugin's setting alone —
-		// returning false here would quietly switch off automatic updates site-wide.
+		// returning true here would quietly switch automatic updates on site-wide.
 		return $update;
 	}
 
@@ -129,7 +138,7 @@ class WPAQS_Updater {
 	 * @param string $plugin Plugin file being rendered.
 	 * @return string
 	 */
-	public static function explain_no_auto_update( $html, $plugin ) {
+	public static function explain_auto_update( $html, $plugin ) {
 		if ( self::basename() !== $plugin ) {
 			return $html;
 		}
@@ -138,7 +147,7 @@ class WPAQS_Updater {
 		// update cannot be told apart from a check that never ran or one that failed, and this
 		// cell is where somebody wondering is already looking.
 		return '<span class="description">'
-			. esc_html__( 'Updates are installed by hand on purpose: this plugin will not update itself unattended.', 'wpaqs' )
+			. esc_html__( 'Updates install themselves. An out-of-date scanner reports green across a fleet, which is worse than no scanner — so this one keeps itself current.', 'wpaqs' )
 			. '<br />' . esc_html( self::status_text() )
 			. '<br /><a href="' . esc_url( self::check_url() ) . '">' . esc_html__( 'Check for a new release now', 'wpaqs' ) . '</a>'
 			. '</span>';

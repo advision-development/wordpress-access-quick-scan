@@ -288,6 +288,22 @@ package URL is checked against a pinned host, owner and repository rather than t
 API response, TLS verification is never relaxed, and a tag that is not a plain version is
 refused rather than interpreted.
 
+**Auto-update is on, and the reasoning is inverted from where this plugin started.** It
+shipped refusing to update itself, because the pinning answers a tampered response and
+nothing answers a release genuinely published by somebody who should not have been able to
+publish it — so the remaining control was a person pressing each update. Across 162
+self-owned sites that trade inverts: updating by hand per release is how the project dies,
+and an out-of-date scanner reports green, which is worse than no scanner.
+
+**The compensating controls moved rather than disappeared**, and they are repository
+settings rather than code: 2FA on accounts that can publish, a protected environment on the
+release workflow, required review before publishing. If those are not in place, this plugin
+is executing whatever a tag produces on every site that runs it.
+
+**The toggle is replaced, never left in place.** `automatically()` answers the filter
+unconditionally, so a checkbox there could be switched off and change nothing — the fault
+this plugin exists to report. The escape hatch is the `wpaqs_auto_update` filter.
+
 **The updater offers, and refuses to apply itself unattended.** The pinning answers a tampered
 response and nothing else. A release genuinely published from the pinned repository by somebody
 who should not have been able to publish it passes every check in the file, so the remaining

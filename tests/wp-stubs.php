@@ -85,8 +85,18 @@ if ( ! function_exists( 'get_edit_user_link' ) ) {
 }
 
 if ( ! function_exists( 'apply_filters' ) ) {
+	/**
+	 * Honours a value a harness planted, so a filter that exists as an escape hatch can be
+	 * shown to be one.
+	 *
+	 * It returned `$value` unconditionally, which meant an assertion that a filter is
+	 * consulted passed whether or not the code consulted it — the escape hatch could have
+	 * been deleted and every suite would still have agreed it worked.
+	 */
 	function apply_filters( $hook, $value ) {
-		return $value;
+		$planted = isset( $GLOBALS['filter_values'] ) ? $GLOBALS['filter_values'] : array();
+
+		return array_key_exists( $hook, $planted ) ? $planted[ $hook ] : $value;
 	}
 }
 

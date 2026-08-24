@@ -395,47 +395,71 @@ check(
 
 // ------------------------------------------------- never updates itself unattended
 
-// The one risk the pinning cannot reduce: a release genuinely published from the pinned
-// repository by somebody who should not have been able to publish it is correctly hosted,
-// correctly named and correctly signed, and every check in this file passes it. What is left is
-// the plugin's own rule applied to itself — a person presses it.
-$file = 'wordpress-access-quick-scan/wordpress-access-quick-scan.php';
+/*
+ * The one risk the pinning cannot reduce: a release genuinely published from the pinned
+ * repository by somebody who should not have been able to publish it is correctly hosted,
+ * correctly named and every check in this file passes it.
+ *
+ * The answer used to be the plugin's own rule turned on itself — a person presses each
+ * update. Across a fleet that inverts: updating 162 sites by hand per release is how the
+ * project dies, and an out-of-date scanner reports green, which is worse than no scanner
+ * because a green dashboard is read as an answer. The compensating control moves to where
+ * publishing happens: 2FA on accounts that can publish, a protected environment on the
+ * release workflow, required review before publishing.
+ *
+ * $file is the plugin's own entry, set where the transient is asserted above.
+ */
 
 check(
-	'this plugin refuses to update itself unattended',
-	false === WPAQS_Updater::never_automatically( true, (object) array( 'plugin' => $file ) ),
-	'a compromised release would otherwise install itself on the next cron run'
+	'this plugin keeps itself current',
+	true === WPAQS_Updater::automatically( false, (object) array( 'plugin' => $file ) ),
+	'an out-of-date scanner reports green across a fleet, which is worse than no scanner'
 );
 
 check(
-	'and refuses even when WordPress had not intended to',
-	false === WPAQS_Updater::never_automatically( null, (object) array( 'plugin' => $file ) )
+	'even when WordPress had not intended to',
+	true === WPAQS_Updater::automatically( null, (object) array( 'plugin' => $file ) )
 );
 
-// Returning false for everything would quietly switch off automatic updates site-wide, which
+// The escape hatch, and it is code rather than a checkbox because the checkbox would not
+// work — see the toggle assertion below.
+$GLOBALS['filter_values']['wpaqs_auto_update'] = false;
+check(
+	'a site can refuse, in code',
+	false === WPAQS_Updater::automatically( true, (object) array( 'plugin' => $file ) ),
+	'a fleet-wide policy with no way out is a policy somebody edits the plugin to escape'
+);
+$GLOBALS['filter_values'] = array();
+
+// Returning true for everything would quietly switch automatic updates on site-wide, which
 // is a change to how the whole site is maintained and none of this plugin's business.
 check(
 	'another plugin keeps whatever WordPress decided',
-	true === WPAQS_Updater::never_automatically( true, (object) array( 'plugin' => 'akismet/akismet.php' ) ),
-	'returning false for everything would switch off automatic updates site-wide'
+	true === WPAQS_Updater::automatically( true, (object) array( 'plugin' => 'akismet/akismet.php' ) ),
+	'returning true for everything would switch automatic updates on site-wide'
 );
 
-check( 'including when that was false', false === WPAQS_Updater::never_automatically( false, (object) array( 'plugin' => 'akismet/akismet.php' ) ) );
-check( 'and a malformed item is left alone', true === WPAQS_Updater::never_automatically( true, 'not an object' ) );
-check( 'as is one with no plugin file', true === WPAQS_Updater::never_automatically( true, new stdClass() ) );
+check( 'including when that was false', false === WPAQS_Updater::automatically( false, (object) array( 'plugin' => 'akismet/akismet.php' ) ) );
+check( 'and a malformed item is left alone', true === WPAQS_Updater::automatically( true, 'not an object' ) );
+check( 'as is one with no plugin file', true === WPAQS_Updater::automatically( true, new stdClass() ) );
 
-// A control that silently does nothing reads as broken, so the missing toggle is explained
-// where somebody wondering about it will look.
+/*
+ * The toggle is replaced rather than left in place. `automatically()` answers the filter
+ * unconditionally, so the checkbox WordPress would print could be switched off and change
+ * nothing — a control that looks like it works and does not, which is the fault this plugin
+ * exists to report rather than commit.
+ */
 check(
-	'the missing toggle says why it is missing',
-	false !== stripos( WPAQS_Updater::explain_no_auto_update( '<toggle />', $file ), 'by hand on purpose' ),
-	'a control that silently does nothing reads as broken'
+	'the replaced toggle says what is actually happening',
+	false !== stripos( WPAQS_Updater::explain_auto_update( '<toggle />', $file ), 'install themselves' ),
+	'a checkbox that cannot change the outcome is worse than a sentence'
 );
 
 check(
 	'and another plugin keeps its own toggle',
-	'<toggle />' === WPAQS_Updater::explain_no_auto_update( '<toggle />', 'akismet/akismet.php' )
+	'<toggle />' === WPAQS_Updater::explain_auto_update( '<toggle />', 'akismet/akismet.php' )
 );
+
 
 // ------------------------------------------------------------- what the last check knows
 
@@ -489,9 +513,9 @@ check(
 );
 
 // The cell somebody is already looking at carries the state and a way to re-check.
-$cell = WPAQS_Updater::explain_no_auto_update( '<toggle />', $file );
+$cell = WPAQS_Updater::explain_auto_update( '<toggle />', $file );
 
-check( 'the plugin row states the policy', false !== stripos( $cell, 'by hand on purpose' ) );
+check( 'the plugin row states the policy', false !== stripos( $cell, 'install themselves' ) );
 check( 'and what the last check found', false !== stripos( $cell, 'did not succeed' ) );
 check( 'and offers a re-check', false !== strpos( $cell, WPAQS_Updater::CHECK_ACTION ) );
 check( 'with a nonce on it', false !== strpos( WPAQS_Updater::check_url(), '_wpnonce' ), 'it clears caches, so it is not a bare link' );
