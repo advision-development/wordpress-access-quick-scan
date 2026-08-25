@@ -3,6 +3,40 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.10.0
+
+**The console can see who has access.** Until now the fleet push carried findings and
+nothing else, so the console could say "an application password has never been used" and
+could not say which account held it, what else that account could do, or whether anybody was
+signed in as it. It raised the question and had no way to answer it.
+
+The export now carries the account list, the live sessions, the application passwords and
+the effective code capabilities — **and the line about what never leaves is unchanged.**
+That line is specific: the password hash, the session verifier, and the raw activation key
+behind a pending reset are the material that would let somebody *become* one of these
+accounts. A login, a role, a capability, an address, a user agent and a date are what let
+somebody *recognise* one.
+
+The verifier is the one worth naming twice, because `WPAQS_Sessions::for_user()` carries it
+on purpose — this plugin's own screen needs it to name a session it can end — and any copy
+of that row that forgets to drop it ships live session identifiers to a console holding 162
+sites at once. It is stripped, and asserted stripped in both directions: the value and the
+key. Ending a session remotely will be a signed command resolved on the site, not a token
+sent to a browser.
+
+`recommendation` leaves with each finding now. The console prints it and writes none of its
+own — a second wording of what to do about a finding drifts from this one the first time
+either moves.
+
+**A fleet report is identified by what it found, not by the hour it ran.** The run id was
+`gmdate( 'Y-m-d-H' )`, and the console derives a scan's document id from it, so two reads in
+one hour wrote to a single document: the first answer was overwritten and gone. Worse, the
+console refuses a review of any scan but the one the site currently points at, and that
+refusal compares ids — a second read replacing the first *in place* left the id unchanged,
+the refusal silent, and somebody signing off findings they had never seen while reading the
+ones they had. The id is now derived from when the read ran and what it found. The sibling
+plugin has always done this.
+
 ## 0.9.0
 
 **This plugin keeps itself current.** The rule it shipped with was the project's own
