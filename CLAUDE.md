@@ -2,6 +2,35 @@
 
 Guidance for Claude Code working in this repository.
 
+## What leaves this site for the console
+
+**A finding names the actions it supports, and the console never works them out.**
+
+`WPMQS_Report::offers()` / `WPAQS_Report::offers()` put an `actions` array on every exported
+finding. Each entry carries `id` — the name the controller dispatches on — `label`, and
+`params` already built, plus `refused` in this plugin's own words when an action it would
+otherwise offer is unavailable on that target.
+
+This exists because the console guessed. It drew "quarantine this file" on every target and
+was wrong three ways at once: on `user:1` quarantine means nothing and the action is to
+suspend the account; on a modified core file quarantine breaks the site and the repair is to
+reinstall core; on `option:file_edit` there is no action at all, the next step is a line in
+wp-config.php. Deciding needs the target vocabulary, the eligibility rules and the site, and
+all three are here.
+
+**Send the parameters, not just the name.** A console holding
+`{ id: 'quarantine_files', params: { relpaths: [...] } }` can sign that intent and send it
+back without parsing a target or constructing an argument — which is what the command
+channel needs, and an intent it cannot construct is an intent it cannot get wrong.
+
+**A refusal is reported, never omitted.** "No button" and "a button that would be refused,
+and here is why" are different answers, and only the second stops somebody looking for it.
+
+**No action offers to end one named session.** `end_session()` takes the verifier, and the
+verifier is the field this plugin refuses to send because it names a live session. Only
+`end_sessions()` — every session on an account — is offered, because it needs the account
+alone. A console that could end one named session would be a console holding the name.
+
 ## What this is
 
 A WordPress plugin that answers one question: **who has access to this site right now, and

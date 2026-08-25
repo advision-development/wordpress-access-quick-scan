@@ -150,6 +150,17 @@ if ( ! function_exists( 'get_option' ) ) {
 	}
 }
 
+if ( ! function_exists( 'get_site_option' ) ) {
+	/*
+	 * Network-wide options. Reached through the quarantine module, which the malware
+	 * plugin's export now consults to decide whether a finding can offer that action —
+	 * so a report built in a test walks into it without a WordPress around.
+	 */
+	function get_site_option( $name, $default = false ) {
+		return $default;
+	}
+}
+
 if ( ! function_exists( 'home_url' ) ) {
 	function home_url() {
 		return 'https://example.test';

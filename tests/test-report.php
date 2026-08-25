@@ -141,4 +141,72 @@ check_export(
 	'capabilities written straight against an account are carried — the Users screen shows neither'
 );
 
+/*
+ * The actions a finding offers, named and parameterised here.
+ *
+ * The console must not work this out. Over on the sibling it tried and drew "quarantine
+ * this file" on an account and on a modified core file, having decided from a target whose
+ * vocabulary it does not own. Here the targets are accounts, sessions, credentials and
+ * settings, and what each supports is a fact about this plugin's action registry.
+ */
+
+function wpaqs_offered( $target ) {
+	$export = WPAQS_Report::to_export_array(
+		array(
+			'findings' => array(
+				array( 'rule' => 'r', 'target' => $target, 'severity' => 'high', 'title' => 't' ),
+			),
+		)
+	);
+
+	return $export['findings'][0]['actions'];
+}
+
+$password = wpaqs_offered( 'user:2:app-password:52ea9b9e-27a2-4951-ad43-cbdcfa0cdae5' );
+
+check_export(
+	1 === count( $password )
+		&& 'revoke_password' === $password[0]['id']
+		&& 2 === $password[0]['params']['user_id']
+		&& '52ea9b9e-27a2-4951-ad43-cbdcfa0cdae5' === $password[0]['params']['uuid'],
+	'an application password offers revoking, with the account and the uuid already in the parameters'
+);
+
+$sessions = wpaqs_offered( 'user:7:networks' );
+
+check_export(
+	1 === count( $sessions )
+		&& 'end_sessions' === $sessions[0]['id']
+		&& 7 === $sessions[0]['params']['user_id'],
+	'a session finding offers ending every session on the account'
+);
+
+/*
+ * The assertion that keeps the refusal intact through this door.
+ *
+ * `end_session()` — one session by name — takes the verifier, and the verifier is the field
+ * this plugin refuses to send because it names a live session. Offering that action would
+ * mean a console holding the name, so only the all-at-once form is offered and no parameter
+ * anywhere carries a verifier.
+ */
+check_export(
+	false === strpos( wp_json_encode( wpaqs_offered( 'user:7:session' ) ), 'verifier' ),
+	'no action offers to end one named session, because naming one means sending its verifier'
+);
+
+$registration = wpaqs_offered( 'registration' );
+
+check_export(
+	2 === count( $registration )
+		&& 'close_registration' === $registration[0]['id']
+		&& 'park_default_role' === $registration[1]['id'],
+	'open registration offers closing it or parking the default role'
+);
+
+check_export(
+	array() === wpaqs_offered( 'option:file_edit' ),
+	'a setting with no action of its own offers nothing — the next step is a line in wp-config.php'
+);
+
+
 finish();

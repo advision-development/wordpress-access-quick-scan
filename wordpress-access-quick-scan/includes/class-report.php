@@ -106,6 +106,8 @@ class WPAQS_Report {
 				// what to do about a finding drifts from this one the first time either
 				// moves, and the console would be the copy nobody updates.
 				'recommendation' => isset( $finding['recommendation'] ) ? (string) $finding['recommendation'] : '',
+				// What this finding can be acted on with, decided here. See offers().
+				'actions'        => self::offers( $target ),
 			);
 		}
 
@@ -116,6 +118,108 @@ class WPAQS_Report {
 			'site'         => home_url(),
 			'findings'     => $out,
 			'access'       => self::access_inventory( $gathered ),
+		);
+	}
+
+	/**
+	 * The corrective actions a finding supports, named and parameterised here.
+	 *
+	 * **The console must not work this out**, and the sibling plugin's export carries the
+	 * same block for the same reason: over there the console drew "quarantine this file" on
+	 * an account and on a modified core file, having decided from a target it does not own
+	 * the vocabulary of. Here the targets are accounts, sessions, credentials and settings,
+	 * and what each one supports is a fact about this plugin's own action registry.
+	 *
+	 * Each entry carries the id the controller dispatches on and the arguments already
+	 * built, so a console can sign an intent it did not have to construct — which is what
+	 * the command channel will rest on, and an intent it cannot construct is one it cannot
+	 * get wrong.
+	 *
+	 * **Ending a session is deliberately absent.** `end_session()` takes the verifier, and
+	 * the verifier is the one field this plugin refuses to send: it names a live session.
+	 * `end_sessions()` — all of an account's at once — needs only the account, so that is
+	 * the one offered. A console that could end a single named session would be a console
+	 * holding the name.
+	 *
+	 * @param string $target The finding's target.
+	 * @return array
+	 */
+	private static function offers( $target ) {
+		if ( '' === $target ) {
+			return array();
+		}
+
+		// Registration settings, which are a site-wide switch rather than an account.
+		if ( 'registration' === $target || 0 === strpos( $target, 'option:users_can_register' ) ) {
+			return array(
+				array(
+					'id'     => 'close_registration',
+					'label'  => __( 'Close registration', 'wpaqs' ),
+					'params' => array(),
+				),
+				array(
+					'id'     => 'park_default_role',
+					'label'  => __( 'Set the default role to Subscriber', 'wpaqs' ),
+					'params' => array(),
+				),
+			);
+		}
+
+		// A setting with no action of its own: the next step is a line in wp-config.php.
+		if ( 0 === strpos( $target, 'option:' ) ) {
+			return array();
+		}
+
+		if ( 0 !== strpos( $target, 'user:' ) ) {
+			return array();
+		}
+
+		$rest = substr( $target, strlen( 'user:' ) );
+		$id   = (int) strtok( $rest, ':' );
+
+		if ( $id <= 0 ) {
+			return array();
+		}
+
+		// An application password. Revoking is the only thing that stops one — it survives
+		// a password change and every session being ended.
+		if ( false !== strpos( $rest, ':app-password:' ) ) {
+			$uuid = substr( $rest, strpos( $rest, ':app-password:' ) + strlen( ':app-password:' ) );
+
+			return '' !== $uuid
+				? array(
+					array(
+						'id'     => 'revoke_password',
+						'label'  => __( 'Revoke this application password', 'wpaqs' ),
+						'params' => array( 'user_id' => $id, 'uuid' => $uuid ),
+					),
+				)
+				: array();
+		}
+
+		// Sessions. All of the account's, because ending one by name would mean sending
+		// the verifier that names it.
+		if ( false !== strpos( $rest, ':session' ) || false !== strpos( $rest, ':networks' ) ) {
+			return array(
+				array(
+					'id'     => 'end_sessions',
+					'label'  => __( 'End every session on this account', 'wpaqs' ),
+					'params' => array( 'user_id' => $id ),
+					'after'  => __( 'The addresses are the evidence, so read them before ending them. This does not change the password, and an application password keeps working afterwards.', 'wpaqs' ),
+				),
+			);
+		}
+
+		// A pending reset, a lookalike login, a duplicate address, a recent administrator:
+		// every one of these needs a person to confirm something rather than a button. The
+		// account's sessions are the one thing that can be closed without deciding whether
+		// the account itself is legitimate.
+		return array(
+			array(
+				'id'     => 'end_sessions',
+				'label'  => __( 'End every session on this account', 'wpaqs' ),
+				'params' => array( 'user_id' => $id ),
+			),
 		);
 	}
 
