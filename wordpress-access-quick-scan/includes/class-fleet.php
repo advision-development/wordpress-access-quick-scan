@@ -291,6 +291,15 @@ class WPAQS_Fleet {
 				'startedAt'     => isset( $record['started_at'] ) ? (int) $record['started_at'] : 0,
 				'finishedAt'    => isset( $record['completed_at'] ) ? (int) $record['completed_at'] : time(),
 				'findings'      => isset( $export['findings'] ) ? $export['findings'] : array(),
+				/*
+				 * Whatever else this plugin's export offers, forwarded rather than named.
+				 *
+				 * This file is byte-identical in both plugins and has to stay that way, so
+				 * it may not know that one of them sends an access inventory and the other
+				 * does not. `to_export_array()` decides what leaves the site; this decides
+				 * only that it leaves.
+				 */
+				'access'        => isset( $export['access'] ) ? $export['access'] : null,
 			),
 			true
 		);

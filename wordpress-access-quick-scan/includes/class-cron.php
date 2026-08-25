@@ -133,7 +133,41 @@ class WPAQS_Cron {
 			return;
 		}
 
-		WPAQS_Fleet::push( WPAQS_Report::gather(), gmdate( 'Y-m-d-H' ) );
+		$record = WPAQS_Report::gather();
+
+		/*
+		 * A run id per run, and it used to be gmdate( 'Y-m-d-H' ) — the hour.
+		 *
+		 * The console derives a scan's document id from this, and two reads in the same
+		 * hour therefore wrote to one document: the first one's answer was overwritten
+		 * and gone. Worse, the console refuses a review of any scan but the one the site
+		 * currently points at, and that refusal compares ids — so a second read replacing
+		 * the first *in place* left the id unchanged, the refusal silent, and somebody
+		 * signing off findings they had never seen while reading the ones they had.
+		 *
+		 * The sibling plugin has always sent a distinct id per run. This is the same
+		 * shape, derived from when the read happened and what it found rather than from
+		 * the clock face, so a manual send and the daily cron in one hour are two answers.
+		 *
+		 * Derived, never random. The console stores a scan under an id built from this so
+		 * that a retry after a timeout overwrites its own row instead of adding an
+		 * execution that never happened, and a random id would file every retry as a new
+		 * one. Two reads that ran at the same second and found the same things are the
+		 * same answer and belong in the same document; anything else is a different one.
+		 */
+		$ids = array();
+
+		foreach ( (array) $record['findings'] as $finding ) {
+			$ids[] = isset( $finding['target'] ) ? (string) $finding['target'] : '';
+		}
+
+		$run_id = substr(
+			sha1( (string) $record['started_at'] . '|' . (string) $record['completed_at'] . '|' . implode( ',', $ids ) ),
+			0,
+			20
+		);
+
+		WPAQS_Fleet::push( $record, $run_id );
 	}
 
 	/**
