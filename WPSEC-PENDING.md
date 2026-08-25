@@ -5,7 +5,7 @@ left. Ordered by what blocks what, not by size.
 
 The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated here.
 
-**Last reviewed:** 2026-08-24 (after the 0.29.0 / 0.9.0 release)
+**Last reviewed:** 2026-08-25 (0.11.0 built and installed on two sites, not tagged)
 
 ---
 
@@ -25,7 +25,25 @@ write it only where it happened.
 And the reason it was invisible from both ends: `requested_at` lives in an option, so
 deactivating and reactivating the plugin does not clear it. The usual remedy did nothing.
 
-### Released and tagged — v0.9.0
+### 0.11.0 is built and installed, and not tagged
+
+**The header reads 0.11.0 and the newest tag is v0.10.0.** Two sites run a zip installed by
+hand; the rest of the fleet is on the tagged release and stays there until a tag is cut.
+
+0.11.0 adds the two things the console's access tab is built on: `access_inventory()`, which
+sends the accounts, sessions and application passwords with the hash, verifier and activation
+key stripped, and `offers()`, which names per finding what can be done about it with the
+parameters already built.
+
+**Both plugins are released together**, so this tag goes with WPMQS v0.32.0 — a fleet running
+one half of the pair reports half a site. **Read the compensating-controls item below first.**
+
+```
+./build.sh
+git tag v0.11.0 && git push origin v0.11.0
+```
+
+### The tag and the header must agree — v0.9.0
 
 Header and published release both read **0.9.0**, tagged 2026-08-24. The release
 workflow refuses a tag that disagrees with the plugin header, which is the guard that

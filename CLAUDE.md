@@ -26,6 +26,15 @@ channel needs, and an intent it cannot construct is an intent it cannot get wron
 **A refusal is reported, never omitted.** "No button" and "a button that would be refused,
 and here is why" are different answers, and only the second stops somebody looking for it.
 
+**The inventory leaves, the credentials do not.** `access_inventory()` sends the accounts,
+the open sessions and the application passwords, so the console's access tab can show what
+the plugin's own screen shows. Three fields are stripped before it goes: the **password
+hash**, the **session verifier** and the **raw activation key**. The line is not "is this
+sensitive" but "does holding this let somebody *become* this account" — a username and a
+last-login are recognition, a verifier is impersonation. The console refuses the same list
+again on arrival, and drops the whole row rather than the field, because a row shaped to
+carry a credential is a row nobody understood.
+
 **No action offers to end one named session.** `end_session()` takes the verifier, and the
 verifier is the field this plugin refuses to send because it names a live session. Only
 `end_sessions()` — every session on an account — is offered, because it needs the account
