@@ -300,6 +300,7 @@ class WPAQS_Fleet {
 				 * only that it leaves.
 				 */
 				'access'        => isset( $export['access'] ) ? $export['access'] : null,
+				'malware'       => isset( $export['malware'] ) ? $export['malware'] : null,
 			),
 			true
 		);

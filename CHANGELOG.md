@@ -3,6 +3,44 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.11.0
+
+**A finding names the actions it supports.** Every exported finding now carries an `actions`
+array: the id the controller dispatches on, a label, and the parameters already built — plus
+a refusal, in this plugin's own words, where an action it would otherwise offer is
+unavailable on that target.
+
+This exists because the console guessed and was wrong three ways at once. It drew
+"quarantine this file" on every target: on `user:1`, where quarantine means nothing and the
+action is to suspend the account; on a modified core file, where quarantining breaks the
+site and the repair is to reinstall core; and on `option:file_edit`, where there is no
+action at all because the next step is a line in wp-config.php. Deciding that needs the
+target vocabulary, the eligibility rules and the site itself, and none of the three live in
+a console.
+
+The parameters go with the name deliberately. A console holding
+`{ id, params }` can sign that intent and send it back without parsing a target or
+constructing an argument, which is what the command channel will need — and an intent it
+cannot construct is an intent it cannot get wrong.
+
+**No action offers to end one named session.** `end_session()` takes the verifier, and the
+verifier is the field this plugin refuses to send because it names a live session. Only
+`end_sessions()` — every session on an account — is offered, because it needs the account
+alone. A console that could end one named session would be a console holding the name.
+
+## 0.10.1
+
+**Nothing changes on a site running this.** The shared `class-fleet.php` forwards a `malware`
+block alongside the `access` one when the export offers it, and this plugin's export has no
+such key — the field goes out as `null` and the console stores nothing.
+
+The change is here because that file is copied byte-for-byte into the sibling, where the
+export has begun carrying one. A shared file edited in one repository and not the other
+fails that repository's own build, which is the point of the checksum.
+
+Versioned rather than merged quietly, so the header and the published zip keep saying the
+same thing.
+
 ## 0.10.0
 
 **The console can see who has access.** Until now the fleet push carried findings and
