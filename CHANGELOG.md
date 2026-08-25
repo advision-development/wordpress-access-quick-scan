@@ -3,6 +3,19 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.10.1
+
+**Nothing changes on a site running this.** The shared `class-fleet.php` forwards a `malware`
+block alongside the `access` one when the export offers it, and this plugin's export has no
+such key — the field goes out as `null` and the console stores nothing.
+
+The change is here because that file is copied byte-for-byte into the sibling, where the
+export has begun carrying one. A shared file edited in one repository and not the other
+fails that repository's own build, which is the point of the checksum.
+
+Versioned rather than merged quietly, so the header and the published zip keep saying the
+same thing.
+
 ## 0.10.0
 
 **The console can see who has access.** Until now the fleet push carried findings and
