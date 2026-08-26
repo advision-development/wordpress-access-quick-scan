@@ -3,6 +3,24 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.12.0
+
+**A finding names what it is about, not only what it points at.** Every exported finding now
+carries a `subject`: the coarser noun behind its target. Five of this plugin's target shapes —
+`user:1`, `user:1:sessions`, `user:1:networks`, `user:1:app-password:…`, `user:1:reset` — all
+describe one person, and nothing in the export said so.
+
+Measured across a real fleet: eight sites in ten had one account named by more than one rule.
+On the worst of them five findings spanning both plugins described a single administrator:
+application passwords, one used from a foreign address, sessions from many networks, one never
+used. The console drew them as five unrelated cards in two tabs, because it splits by scanner
+and the coincidence does not.
+
+Sent from here for the reason `offers()` exists. The target grammar is this plugin's,
+`offers()` already reads it, and a console taught to read it too would be a second place to
+update when it changes. The console groups on the identifier and never scores it: five medium
+findings about one account are not a high.
+
 ## 0.11.0
 
 **A finding names the actions it supports.** Every exported finding now carries an `actions`
