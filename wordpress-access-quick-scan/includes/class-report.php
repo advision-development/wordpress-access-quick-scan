@@ -108,6 +108,9 @@ class WPAQS_Report {
 				'recommendation' => isset( $finding['recommendation'] ) ? (string) $finding['recommendation'] : '',
 				// What this finding can be acted on with, decided here. See offers().
 				'actions'        => self::offers( $target ),
+				// What it is about, so the console can see two findings sharing one
+				// account without learning this plugin's target grammar. See subject().
+				'subject'        => self::subject( $target ),
 			);
 		}
 
@@ -144,6 +147,65 @@ class WPAQS_Report {
 	 * @param string $target The finding's target.
 	 * @return array
 	 */
+	/**
+	 * What a finding is about, as one identifier several findings can share.
+	 *
+	 * A target names a thing precisely — `user:1:app-password:52ea9b9e` is one password on
+	 * one account — and the console needs the coarser noun behind it to see that five
+	 * findings are about the same person. Across a real fleet, eight sites in ten had one
+	 * account named by more than one rule, and on the worst of them five findings spanning
+	 * both plugins described the same administrator: application passwords, one used from a
+	 * foreign address, sessions from many networks. Read apart they are five shrugs.
+	 *
+	 * Sent from here rather than parsed over there for the reason `offers()` exists. The
+	 * target grammar is this plugin's, `offers()` already reads it, and a console that
+	 * learned to read it too would be a second place to update when it changes — which is
+	 * how the console came to draw "quarantine this file" on an account.
+	 *
+	 * The console groups on `id` and never scores it: five medium findings about one
+	 * account are not a high, and saying they were would be the console deciding.
+	 *
+	 * @param string $target What the finding is about.
+	 * @return array Empty when the target names nothing shareable.
+	 */
+	private static function subject( $target ) {
+		if ( '' === $target ) {
+			return array();
+		}
+
+		if ( 'registration' === $target || 0 === strpos( $target, 'option:users_can_register' ) ) {
+			return array(
+				'id'   => 'option:users_can_register',
+				'kind' => 'setting',
+			);
+		}
+
+		if ( 0 === strpos( $target, 'option:' ) ) {
+			// The option's own name, without whatever follows it.
+			$name = (string) strtok( substr( $target, strlen( 'option:' ) ), ':' );
+
+			return '' !== $name
+				? array(
+					'id'   => 'option:' . $name,
+					'kind' => 'setting',
+				)
+				: array();
+		}
+
+		if ( 0 !== strpos( $target, 'user:' ) ) {
+			return array();
+		}
+
+		$id = (int) strtok( substr( $target, strlen( 'user:' ) ), ':' );
+
+		return $id > 0
+			? array(
+				'id'   => 'user:' . $id,
+				'kind' => 'account',
+			)
+			: array();
+	}
+
 	private static function offers( $target ) {
 		if ( '' === $target ) {
 			return array();

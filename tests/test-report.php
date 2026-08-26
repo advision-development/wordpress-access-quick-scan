@@ -209,4 +209,76 @@ check_export(
 );
 
 
+/*
+ * What a finding is about, as the coarser noun several findings can share.
+ *
+ * The console groups on this rather than learning the target grammar, which is this
+ * plugin's and which `offers()` already reads. The assertion that matters is the last one:
+ * five findings naming one account through four different target shapes have to arrive at
+ * one identifier, because that is the coincidence the console cannot see today.
+ */
+function wpaqs_subject( $target ) {
+	$method = new ReflectionMethod( 'WPAQS_Report', 'subject' );
+
+	// Required on 7.4, a no-op from 8.1, deprecated from 8.5.
+	if ( PHP_VERSION_ID < 80100 ) {
+		$method->setAccessible( true );
+	}
+
+	return $method->invoke( null, $target );
+}
+
+$subjects = array(
+	'a bare account'                    => array( 'user:1', array( 'id' => 'user:1', 'kind' => 'account' ) ),
+	'one of its application passwords'  => array( 'user:1:app-password:52ea9b9e-27a2', array( 'id' => 'user:1', 'kind' => 'account' ) ),
+	'its sessions'                      => array( 'user:1:sessions', array( 'id' => 'user:1', 'kind' => 'account' ) ),
+	'its networks'                      => array( 'user:1:networks', array( 'id' => 'user:1', 'kind' => 'account' ) ),
+	'a pending reset on it'             => array( 'user:1:reset', array( 'id' => 'user:1', 'kind' => 'account' ) ),
+	'a different account'               => array( 'user:2', array( 'id' => 'user:2', 'kind' => 'account' ) ),
+	'registration, however it is spelt' => array( 'registration', array( 'id' => 'option:users_can_register', 'kind' => 'setting' ) ),
+	'and spelt the other way'           => array( 'option:users_can_register', array( 'id' => 'option:users_can_register', 'kind' => 'setting' ) ),
+	'another setting'                   => array( 'option:default_role', array( 'id' => 'option:default_role', 'kind' => 'setting' ) ),
+	'nothing at all'                    => array( '', array() ),
+	'a target this does not know'       => array( 'file:wp-config.php', array() ),
+	'an account with no id'             => array( 'user:', array() ),
+	'an id that is not one'             => array( 'user:zero', array() ),
+);
+
+foreach ( $subjects as $why => $case ) {
+	list( $target, $expect ) = $case;
+
+	check_export( wpaqs_subject( $target ) === $expect, 'subject of ' . $why );
+}
+
+$shapes = array( 'user:1', 'user:1:sessions', 'user:1:networks', 'user:1:app-password:abc', 'user:1:reset' );
+$ids    = array();
+
+foreach ( $shapes as $shape ) {
+	$found = wpaqs_subject( $shape );
+	$ids[] = isset( $found['id'] ) ? $found['id'] : '';
+}
+
+check_export(
+	array( 'user:1' ) === array_values( array_unique( $ids ) ),
+	'five shapes of one account arrive at one identifier'
+);
+
+// And it reaches the export, not only the method.
+$exported = WPAQS_Report::to_export_array(
+	array(
+		'findings' => array(
+			array( 'rule' => 'sessions_many_networks', 'target' => 'user:1:networks', 'severity' => 'high' ),
+			array( 'rule' => 'app_password_unused', 'target' => 'user:1:app-password:abc', 'severity' => 'medium' ),
+		),
+	)
+);
+
+check_export(
+	isset( $exported['findings'][0]['subject']['id'] )
+		&& 'user:1' === $exported['findings'][0]['subject']['id']
+		&& 'user:1' === $exported['findings'][1]['subject']['id'],
+	'two findings on one account leave with one subject between them'
+);
+
+
 finish();
