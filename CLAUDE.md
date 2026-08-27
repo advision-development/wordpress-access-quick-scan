@@ -35,6 +35,13 @@ last-login are recognition, a verifier is impersonation. The console refuses the
 again on arrival, and drops the whole row rather than the field, because a row shaped to
 carry a credential is a row nobody understood.
 
+**Exporting a field is not the console receiving it.** hawkeye's ingest writes a fixed set of
+keys and drops the rest without a word. It keeps `findings` — with `title`, `detail`,
+`recommendation`, `evidence`, `actions` and `subject` — plus `access`, `counts`, `rejected`,
+`dropped` and `truncated`. Anything else added here lands nowhere and nothing fails.
+`WPSEC-PENDING.md` carries the other half of this note, and the sibling plugin is in exactly
+that position today with its coverage block.
+
 **No action offers to end one named session.** `end_session()` takes the verifier, and the
 verifier is the field this plugin refuses to send because it names a live session. Only
 `end_sessions()` — every session on an account — is offered, because it needs the account
