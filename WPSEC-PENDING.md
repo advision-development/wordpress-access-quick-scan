@@ -5,7 +5,7 @@ left. Ordered by what blocks what, not by size.
 
 The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated here.
 
-**Last reviewed:** 2026-08-25 (0.11.0 built and installed on two sites, not tagged)
+**Last reviewed:** 2026-08-27 (0.12.0 tagged and released)
 
 ---
 
@@ -25,7 +25,37 @@ write it only where it happened.
 And the reason it was invisible from both ends: `requested_at` lives in an option, so
 deactivating and reactivating the plugin does not clear it. The usual remedy did nothing.
 
-### 0.11.0 is built and installed, and not tagged
+### Released through 0.12.0
+
+**v0.11.0 and v0.12.0 are tagged.** 0.11.0 carried `access_inventory()` and the per-finding
+`offers()`; 0.12.0 carried `subject()`, which is what lets the console see that several
+findings describe one account.
+
+**The subject has not been observed arriving.** At the last measurement no site in the fleet
+was reporting on 0.12.0 yet, so the console's correlation band — the whole point of that
+field — has never had data to draw. Close this when a site reports on 0.12.0 and the band
+shows an account.
+
+Both plugins release together. A fleet running one half of the pair reports half a site, and
+the correlation band in particular needs both halves sending subjects before it can group
+anything across them.
+
+### What the console reads of this export, and what it drops
+
+Worth knowing before adding a field: **exporting something is not the console receiving it.**
+hawkeye's `ingest-handler.ts` writes a fixed set of keys and silently drops the rest.
+
+**It stores** `findings` — with `title`, `detail`, `recommendation`, `evidence`, `actions` and
+`subject` — plus `access` (the accounts, sessions and application passwords inventory),
+`counts`, `rejected`, `dropped` and `truncated`.
+
+**It drops** anything else the report carries at the top level.
+
+Nothing errors when a field lands in the second list; it simply is not there on the other
+side. The sibling plugin is currently in exactly that position with its coverage block, which
+is why this note exists in both repositories.
+
+### 0.11.0 was built and installed before it was tagged
 
 **The header reads 0.11.0 and the newest tag is v0.10.0.** Two sites run a zip installed by
 hand; the rest of the fleet is on the tagged release and stays there until a tag is cut.
