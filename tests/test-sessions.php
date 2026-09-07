@@ -423,4 +423,204 @@ check(
 	'the recommendation is to end it, and there is nothing to end'
 );
 
+// ------------------------------------------------------------ session volume
+
+/*
+ * The count, not the spread.
+ *
+ * `sessions_many_networks` needs three networks, and the worst case either plugin has seen
+ * was 809 open sessions on one administrator from one address — so the rule that existed
+ * could not see it, and no other rule had anything to say about the account.
+ */
+$account = array( 'id' => 9, 'login' => 'support' );
+
+/**
+ * That many browser sessions, all from one address.
+ *
+ * One address on purpose: it is the case the networks rule cannot see, and the case the
+ * real site was in.
+ *
+ * @param int $count      How many sessions.
+ * @param int $expiration When they expire.
+ * @return array
+ */
+function many_sessions( $count, $expiration ) {
+	$sessions = array();
+
+	for ( $i = 0; $i < $count; $i++ ) {
+		$sessions[] = array(
+			'verifier'   => 'h' . $i,
+			'ip'         => '127.0.0.1',
+			'ua'         => 'Mozilla/5.0 (Macintosh) Chrome/126.0',
+			'login'      => time() - $i,
+			'expiration' => $expiration,
+			'expired'    => $expiration < time(),
+			'readable'   => true,
+		);
+	}
+
+	return $sessions;
+}
+
+/**
+ * The rules that fired, by slug.
+ *
+ * @param array $findings Findings.
+ * @return array
+ */
+function rules_in( array $findings ) {
+	$rules = array();
+
+	foreach ( $findings as $finding ) {
+		$rules[ $finding['rule'] ] = $finding;
+	}
+
+	return $rules;
+}
+
+$busy = rules_in( WPAQS_Sessions::findings( $account, many_sessions( 809, $live_until ) ) );
+
+check( 'an account with 809 open sessions is reported', isset( $busy['excessive_sessions'] ) );
+check( 'at high', isset( $busy['excessive_sessions'] ) && 'high' === $busy['excessive_sessions']['severity'] );
+check(
+	'and the evidence carries the count and the threshold it passed',
+	isset( $busy['excessive_sessions'] )
+		&& false !== strpos( $busy['excessive_sessions']['evidence'], 'sessions=809' )
+		&& false !== strpos( $busy['excessive_sessions']['evidence'], 'threshold=10' ),
+	'a number with nothing to compare it against is not evidence'
+);
+
+check(
+	'and the networks rule still says nothing about it',
+	! isset( $busy['sessions_many_networks'] ),
+	'809 sessions from one address is one network, which is why the count had to be its own rule'
+);
+
+// The threshold is the sibling's ten, and the two have to agree: both reports are read side
+// by side about the same account. Asserted rather than commented, because a constant nobody
+// checks is a constant that drifts.
+check(
+	'the threshold matches the sibling plugin\'s',
+	10 === WPAQS_Sessions::MAX_SESSIONS,
+	'WPMQS_Database_Scanner::MAX_SESSIONS is ten; one plugin calling eleven excessive while the other calls it ordinary is worse than either answer'
+);
+
+// The benign case, and the reason ten rather than three: a person accumulates a phone, a
+// laptop, a browser they do not usually use, and a few nobody signed out of.
+check(
+	'ten open sessions is silent',
+	! isset( rules_in( WPAQS_Sessions::findings( $account, many_sessions( 10, $live_until ) ) )['excessive_sessions'] ),
+	'a handful is what an ordinary editor holds'
+);
+
+check(
+	'and eleven is not',
+	isset( rules_in( WPAQS_Sessions::findings( $account, many_sessions( 11, $live_until ) ) )['excessive_sessions'] )
+);
+
+// Counted on the open ones, which is what makes the wording true. An account carrying two
+// hundred lapsed tokens WordPress never pruned is history, not two hundred credentials
+// working now — and this is where the two plugins deliberately differ: the sibling counts
+// every row in the meta.
+check(
+	'two hundred expired sessions are not two hundred credentials',
+	array() === WPAQS_Sessions::findings( $account, many_sessions( 200, $lapsed_at ) ),
+	'the catalog wording says live, and it would not be true'
+);
+
+// ------------------------------------------- whether the addresses mean anything
+
+/*
+ * Three of the six rules on this screen compare addresses, and on a host whose proxy does
+ * not pass the client address through all three compare one address with itself. On the real
+ * site every session and every application password recorded 127.0.0.1 and nothing said so.
+ */
+check( '127.0.0.1 is loopback', WPAQS_Sessions::is_loopback( '127.0.0.1' ) );
+check( 'and so is the rest of the block a local proxy can use', WPAQS_Sessions::is_loopback( '127.0.1.53' ) );
+check( 'and ::1', WPAQS_Sessions::is_loopback( '::1' ) );
+check( 'a private address is not loopback', ! WPAQS_Sessions::is_loopback( '10.0.0.4' ) );
+check( 'and neither is a real one', ! WPAQS_Sessions::is_loopback( '203.0.113.9' ) );
+
+check( 'a public address is routable', WPAQS_Sessions::is_routable( '203.0.113.9' ) );
+check( 'an IPv6 one is too', WPAQS_Sessions::is_routable( '2a00:1450:4009:81f::200e' ) );
+check( 'loopback is not', ! WPAQS_Sessions::is_routable( '127.0.0.1' ) );
+check( 'nor is 10/8', ! WPAQS_Sessions::is_routable( '10.4.5.6' ) );
+check( 'nor 172.16/12', ! WPAQS_Sessions::is_routable( '172.16.9.9' ) );
+check( 'nor 192.168/16', ! WPAQS_Sessions::is_routable( '192.168.1.20' ) );
+check( 'nor a link-local address', ! WPAQS_Sessions::is_routable( '169.254.4.4' ) );
+check( 'nor fd00::/8', ! WPAQS_Sessions::is_routable( 'fd00::1' ) );
+check( 'and neither is a string that is not an address', ! WPAQS_Sessions::is_routable( 'unknown' ) );
+
+// The real site: every address on it is the loopback address.
+$loopback = array_fill( 0, 12, '127.0.0.1' );
+
+check(
+	'a site where every address is loopback is reported',
+	1 === count( WPAQS_Sessions::client_ip_findings( $loopback ) ),
+	'this is what disabled three of the six rules and was never said out loud'
+);
+
+$proxied = WPAQS_Sessions::client_ip_findings( $loopback );
+
+check( 'as information rather than an accusation', 'info' === $proxied[0]['severity'] );
+check( 'against the site rather than an account', 'option:client_ip' === $proxied[0]['target'], $proxied[0]['target'] );
+check(
+	'and the evidence names the address it is talking about',
+	false !== strpos( $proxied[0]['evidence'], '127.0.0.1' ) && false !== strpos( $proxied[0]['evidence'], 'recorded=12' ),
+	$proxied[0]['evidence']
+);
+
+// One private address for the whole site is the same broken arrangement: an office gateway
+// rather than a loopback proxy, and every rule that compares addresses is still comparing
+// one address with itself.
+check(
+	'one single private address for the whole site is reported too',
+	1 === count( WPAQS_Sessions::client_ip_findings( array( '10.0.0.4', '10.0.0.4', '10.0.0.4' ) ) )
+);
+
+check(
+	'and loopback beside one private address is one arrangement, not two',
+	1 === count( WPAQS_Sessions::client_ip_findings( array( '127.0.0.1', '127.0.0.1', '10.0.0.4' ) ) )
+);
+
+// ---- the benign cases
+
+// The one that matters: a site with real, varied client addresses. If this fires there, the
+// finding is noise on every healthy site in the fleet.
+check(
+	'a site with real, varied addresses is silent',
+	array() === WPAQS_Sessions::client_ip_findings( array( '203.0.113.9', '198.51.100.4', '192.0.2.7', '2a00:1450:4009:81f::200e' ) ),
+	'this is the state of every site whose host passes the client address through'
+);
+
+check(
+	'and one real address among the private ones is enough to stay silent',
+	array() === WPAQS_Sessions::client_ip_findings( array( '10.0.0.4', '10.0.0.4', '203.0.113.9' ) ),
+	'a routable address means WordPress is being told where somebody connected from'
+);
+
+// Two distinct private addresses means WordPress is seeing something that varies with who
+// connected, which is what the address rules read. An intranet is not a proxy fault.
+check(
+	'two distinct private addresses are silent',
+	array() === WPAQS_Sessions::client_ip_findings( array( '10.0.0.4', '10.0.0.9', '10.0.0.4' ) ),
+	'an address that varies is an address those rules can compare'
+);
+
+// One observation is not a pattern: a WordPress somebody installed on their laptop an hour
+// ago has exactly one session, from 127.0.0.1, and nothing is wrong with it.
+check(
+	'a single recorded address says nothing either way',
+	array() === WPAQS_Sessions::client_ip_findings( array( '127.0.0.1' ) ),
+	'a proxy that does not forward the client address does not forward it once'
+);
+
+check( 'a site with no addresses at all is silent', array() === WPAQS_Sessions::client_ip_findings( array() ) );
+
+check(
+	'and sessions with no address recorded are not evidence about the proxy',
+	array() === WPAQS_Sessions::client_ip_findings( array( '', '', '' ) ),
+	'no address recorded is a different fact from a useless one'
+);
+
 finish();

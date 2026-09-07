@@ -59,6 +59,43 @@ class WPAQS_Sessions {
 	const MANY_NETWORKS = 3;
 
 	/**
+	 * Live sessions above which the count is a finding on its own.
+	 *
+	 * **Ten, and it is the sibling's number rather than a fresh one.**
+	 * `WPMQS_Database_Scanner::MAX_SESSIONS` is also ten, and its reasoning is the reasoning
+	 * here: ten is generous for a person — a phone, a laptop, a browser they do not usually
+	 * use, and a handful of stale rows nobody signed out of — and it is not what an account
+	 * looks like after its credentials have been reused from somewhere else.
+	 *
+	 * The two have to agree because both reports are read side by side, about the same
+	 * account, on the same day. One plugin calling eleven sessions excessive while the other
+	 * called it ordinary would leave the operator deciding which of them to believe, and the
+	 * answer would be an artefact of who last touched a constant. If this number moves, it
+	 * moves in both places.
+	 *
+	 * What is deliberately *not* shared is what gets counted. Over there it is every row in
+	 * the meta; here it is the open ones, because that file docblock is the whole reason this
+	 * class distinguishes them — an account carrying two hundred lapsed tokens WordPress has
+	 * not pruned is history, not two hundred credentials working now.
+	 */
+	const MAX_SESSIONS = 10;
+
+	/**
+	 * Recorded addresses needed before a claim about all of them means anything.
+	 *
+	 * Two. The finding says "every address on this site is loopback", and on a site with
+	 * exactly one recorded address that sentence is true of a single observation — which is
+	 * the state of a WordPress somebody installed on their laptop an hour ago, and of every
+	 * fresh install in the fleet on its first day. A proxy that does not forward the client
+	 * address does not forward it once.
+	 *
+	 * Counted in rows, not in distinct addresses. A threshold on distinct addresses would
+	 * have missed the site this rule comes from entirely: 809 sessions and three application
+	 * passwords there, and one distinct address between them.
+	 */
+	const MIN_ADDRESSES = 2;
+
+	/**
 	 * Sessions for one account.
 	 *
 	 * @param int $user_id User id.
@@ -358,6 +395,150 @@ class WPAQS_Sessions {
 	}
 
 	/**
+	 * Whether an address is the machine talking to itself.
+	 *
+	 * @param string $address IPv4 or IPv6 address.
+	 * @return bool
+	 */
+	public static function is_loopback( $address ) {
+		$address = strtolower( trim( (string) $address ) );
+
+		if ( '' === $address ) {
+			return false;
+		}
+
+		// The whole 127.0.0.0/8 block, not only 127.0.0.1: a proxy on the same host can hand
+		// WordPress any address in it, and ::1 is the same fact over IPv6.
+		return '::1' === $address || 0 === strpos( $address, '127.' );
+	}
+
+	/**
+	 * Whether an address could belong to somebody outside this network.
+	 *
+	 * Asked of the address itself rather than of a list of ranges this file would then have
+	 * to keep. `FILTER_VALIDATE_IP` with both range flags answers it for IPv4 and IPv6 at
+	 * once — private, loopback, link-local and reserved all fail, and a malformed string
+	 * fails too, which is the right answer to "is this somebody's address".
+	 *
+	 * @param string $address IPv4 or IPv6 address.
+	 * @return bool
+	 */
+	public static function is_routable( $address ) {
+		$address = trim( (string) $address );
+
+		if ( '' === $address ) {
+			return false;
+		}
+
+		return false !== filter_var( $address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+	}
+
+	/**
+	 * Whether this site is being told the address anybody connected from.
+	 *
+	 * The question is about the host, not about an account, so it is asked of every address
+	 * the site recorded at once — sessions and application passwords together, expired
+	 * sessions included. The proxy in front of WordPress behaves the same way whether the
+	 * session it forwarded is still open.
+	 *
+	 * The condition is "loopback, or one single private address, and nothing routable". On the
+	 * site this comes from every one of 809 sessions and all three application passwords
+	 * recorded `127.0.0.1`, because the platform's reverse proxy does not pass the client
+	 * address through — which silently disabled `app_password_foreign_ip`,
+	 * `sessions_many_networks` and most of what `non_browser_session` is worth, and nothing on
+	 * the screen said so.
+	 *
+	 * **One private address is included and two are not**, which is the guard that keeps this
+	 * off an ordinary intranet site. A site whose staff all reach it through one office
+	 * gateway sees that gateway's address and nothing else, and that is the same broken
+	 * arrangement for the same reason. Two or more distinct private addresses means WordPress
+	 * is seeing something that varies with who connected, which is what the address-comparing
+	 * rules need — coarse, but it is what those rules are reading.
+	 *
+	 * @param array $addresses Every address recorded on the site, in any order, with repeats.
+	 * @return bool
+	 */
+	public static function client_ip_missing( array $addresses ) {
+		$seen     = array();
+		$recorded = 0;
+
+		foreach ( $addresses as $address ) {
+			$address = trim( (string) $address );
+
+			if ( '' === $address ) {
+				// No address recorded is a different fact from a useless one, and it is not
+				// evidence about the proxy either way.
+				continue;
+			}
+
+			if ( self::is_routable( $address ) ) {
+				return false;
+			}
+
+			$recorded++;
+			$seen[ $address ] = true;
+		}
+
+		// Rows rather than distinct values, and the difference is the whole real case: 809
+		// sessions and three application passwords all recorded one address, so a threshold
+		// counting distinct addresses would have needed two and found one.
+		if ( $recorded < self::MIN_ADDRESSES ) {
+			return false;
+		}
+
+		$private = 0;
+
+		foreach ( array_keys( $seen ) as $address ) {
+			if ( ! self::is_loopback( $address ) ) {
+				$private++;
+			}
+		}
+
+		return $private <= 1;
+	}
+
+	/**
+	 * The site-wide finding about addresses being unusable, if it applies.
+	 *
+	 * Site-wide rather than per account, so it is called once with everything rather than
+	 * from `findings()`. It lives in this class because this is where the plugin keeps what
+	 * it knows about addresses, and because the rules it warns about are mostly this class's.
+	 *
+	 * @param array $addresses Every address recorded on the site, sessions and application
+	 *                         passwords alike.
+	 * @return array
+	 */
+	public static function client_ip_findings( array $addresses ) {
+		if ( ! self::client_ip_missing( $addresses ) ) {
+			return array();
+		}
+
+		$distinct = array();
+		$recorded = 0;
+
+		foreach ( $addresses as $address ) {
+			$address = trim( (string) $address );
+
+			if ( '' !== $address ) {
+				$recorded++;
+				$distinct[ $address ] = true;
+			}
+		}
+
+		return array(
+			WPAQS_Findings::make(
+				'client_ip_not_recorded',
+				'option:client_ip',
+				sprintf(
+					'recorded=%1$d distinct=%2$s',
+					$recorded,
+					implode( ',', array_keys( $distinct ) )
+				)
+			),
+		);
+	}
+
+	/**
 	 * Findings for one account's sessions.
 	 *
 	 * @param array $account  One row from WPAQS_Accounts::all().
@@ -372,6 +553,40 @@ class WPAQS_Sessions {
 		// not pruned.
 		$sessions = self::open( $sessions );
 		$networks = self::networks( $sessions );
+
+		/*
+		 * Volume, on its own, with nothing else about the account needing to look wrong.
+		 *
+		 * There was no rule about how many sessions an account holds, only about how many
+		 * networks they came from — and `sessions_many_networks` needs three, which an
+		 * account signed in 809 times from one address does not have. The count and the
+		 * spread are two different questions and the second one cannot stand in for the
+		 * first: the worst case either plugin has seen was 809 sessions on one
+		 * administrator, from one user agent, on a host that records one address for
+		 * everybody. Every address-based rule was blind to it and every account-based rule
+		 * found nothing wrong with the account.
+		 *
+		 * Counted on the open sessions, which is what makes the wording true. See
+		 * MAX_SESSIONS for why the threshold is the sibling's.
+		 */
+		if ( count( $sessions ) > self::MAX_SESSIONS ) {
+			$findings[] = WPAQS_Findings::make(
+				'excessive_sessions',
+				'user:' . $account['id'] . ':sessions',
+				sprintf(
+					'login=%1$s sessions=%2$d threshold=%3$d networks=%4$s',
+					$account['login'],
+					count( $sessions ),
+					self::MAX_SESSIONS,
+					empty( $networks ) ? 'none recorded' : implode( ',', $networks )
+				),
+				sprintf(
+					/* translators: %d: how many sessions are open on the account. */
+					_n( '%d session is open on this account.', '%d sessions are open on this account.', count( $sessions ), 'wpaqs' ),
+					count( $sessions )
+				)
+			);
+		}
 
 		if ( count( $networks ) >= self::MANY_NETWORKS ) {
 			$findings[] = WPAQS_Findings::make(
