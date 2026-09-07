@@ -27,6 +27,12 @@ class WPAQS_Findings {
 	 */
 	public static function catalog() {
 		return array(
+			'hidden_account_discrepancy'       => array(
+				'severity'       => 'critical',
+				'title'          => __( 'An account exists that the account list does not show', 'wpaqs' ),
+				'detail'         => __( 'WordPress counts the accounts on this site with one query and lists them with another. The two disagree, the list was not capped, and reading the users table directly names an account the list left out. Nothing ordinary produces that: code hooked to pre_user_query removes an account from every list WordPress draws — the Users screen, the author dropdown, the REST route, this plugin\'s own list — while count_users() goes on counting it.', 'wpaqs' ),
+				'recommendation' => __( 'Do not start by deleting the account. It is hidden by code that is still running, and code that recreates an administrator on every request recreates this one. Find what is filtering the user query first: WordPress Malware Quick Scan reads the files and the database for exactly that, and a hidden account is the strongest reason there is to run it. Once the filter is gone the account appears in the list above, with its role, its sessions and its application passwords.', 'wpaqs' ),
+			),
 			'capability_outside_role'           => array(
 				'severity'       => 'high',
 				'title'          => __( 'Account holds capabilities that come from no role', 'wpaqs' ),
@@ -57,6 +63,17 @@ class WPAQS_Findings {
 				'detail'         => __( 'The address that last authenticated with this password matches none of the addresses the account has an open session from. That is expected for a server-to-server integration, and it is also what a stolen credential looks like.', 'wpaqs' ),
 				'recommendation' => __( 'Decide which it is by naming the integration and the host it runs on. If you cannot, revoke the password: an integration that breaks tells you what it was, and a thief does not.', 'wpaqs' ),
 			),
+			/*
+			 * Ported from the sibling, wording and severity included, because the two reports
+			 * are read side by side and one of them calling this critical while the other
+			 * stayed quiet is how a reader concludes the quiet one checked and found nothing.
+			 */
+			'application_password_suspicious_name' => array(
+				'severity'       => 'critical',
+				'title'          => __( 'An application password is named for what it does', 'wpaqs' ),
+				'detail'         => __( 'The label on this credential contains a word nobody writes for a real integration. Whoever created it said what it was for. On a real site one of these was named panel-auto-infect, created and first used in the same minute, and every other check in this plugin stayed quiet about it: it was used, and used from an address the account already had sessions from.', 'wpaqs' ),
+				'recommendation' => __( 'Revoke it from this screen. Then find out how it was created: an application password can only be issued by something already authenticated as this account, so the account itself, or a plugin acting as it, was already under somebody else\'s control — and revoking one credential does not change that.', 'wpaqs' ),
+			),
 			'pending_password_reset'           => array(
 				'severity'       => 'medium',
 				'title'          => __( 'A password reset was requested and never completed', 'wpaqs' ),
@@ -86,6 +103,18 @@ class WPAQS_Findings {
 				'title'          => __( 'One account is signed in from several networks at once', 'wpaqs' ),
 				'detail'         => __( 'This account holds live sessions from addresses on three or more separate networks. A laptop and a phone are normally two, and a person travelling is two over time rather than three at once.', 'wpaqs' ),
 				'recommendation' => __( 'Ask the account holder how many devices they are signed in on. If the number does not match, end the sessions from this screen and change the password: the sessions are the evidence, so read the addresses before ending them.', 'wpaqs' ),
+			),
+			'excessive_sessions'               => array(
+				'severity'       => 'high',
+				'title'          => __( 'One account holds far more live sessions than a person uses', 'wpaqs' ),
+				'detail'         => __( 'Each of these is a credential that can act as this account right now, and WordPress keeps them until the record of each one is deleted. A person accumulates a handful — a phone, a laptop, a browser they do not normally use, and a few nobody signed out of. This is not that. On a real site one administrator held 809 open at once, from one user agent, and no other rule on this screen said anything about it.', 'wpaqs' ),
+				'recommendation' => __( 'Changing the password does not revoke these. WordPress only destroys an account\'s other sessions when the password is changed through the profile screen, so end the account\'s sessions from this screen — and read the addresses first, because they are the evidence. An application password keeps working afterwards and has to be revoked separately.', 'wpaqs' ),
+			),
+			'client_ip_not_recorded'           => array(
+				'severity'       => 'info',
+				'title'          => __( 'This site is not being told which address anybody connected from', 'wpaqs' ),
+				'detail'         => __( 'Every address recorded against a session or an application password on this site is the loopback address, or one single private address. That is not where these people are: it is the reverse proxy in front of WordPress, which is not passing the client address through. Three of the rules on this screen compare addresses — an application password used from somewhere the account has no session from, one account signed in from several networks at once, and reading a session\'s origin beside its user agent — and on this site all three are comparing one address with itself.', 'wpaqs' ),
+				'recommendation' => __( 'Ask whoever runs the hosting to pass the client address through to WordPress, as X-Forwarded-For or as the platform\'s own header, and to set it up so WordPress reads it. Nothing on this site can be changed to fix it, and this plugin will not guess at a header it has not been told to trust — a client that sets its own X-Forwarded-For would then be choosing what this screen reports. Until it is passed through, read "no finding" from those three rules as "not checked".', 'wpaqs' ),
 			),
 			'recent_administrator'              => array(
 				'severity'       => 'info',
