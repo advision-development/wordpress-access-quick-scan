@@ -64,8 +64,70 @@ function user_can( $user, $cap, $object_id = null ) {
 	return 0 === (int) $user ? false : ! empty( $GLOBALS['acting_caps'][ $cap ] );
 }
 
+/**
+ * What the site says it holds.
+ *
+ * `$GLOBALS['counted']` stands in for the state the whole hidden-account rule turns on:
+ * `count_users()` is a plain COUNT(*) with no WP_User_Query in front of it, so a plugin
+ * filtering `pre_user_query` changes what `get_users()` returns and leaves this alone.
+ *
+ * @return array
+ */
 function count_users() {
-	return array( 'total_users' => count( $GLOBALS['users'] ) );
+	return array(
+		'total_users' => isset( $GLOBALS['counted'] ) ? (int) $GLOBALS['counted'] : count( $GLOBALS['users'] ),
+	);
+}
+
+/**
+ * Whether this fake site is a network.
+ *
+ * @return bool
+ */
+function is_multisite() {
+	return ! empty( $GLOBALS['network'] );
+}
+
+/**
+ * $wpdb, with the one method the cross-check calls.
+ *
+ * It honours the NOT IN list and the LIMIT rather than returning a fixed answer, because
+ * the assertions that matter are about the query: that the accounts already listed are
+ * excluded from it, and that it is bounded. A stub that ignored both would pass whatever
+ * the caller sent.
+ */
+class Stub_WPDB {
+
+	public $users = 'wp_users';
+
+	/** Every account in the table, as the rows a real query would return. */
+	public $table = array();
+
+	/** Each SQL string this was asked for, so a suite can assert it was not asked. */
+	public $queries = array();
+
+	public function get_results( $sql ) {
+		$this->queries[] = $sql;
+
+		$excluded = array();
+
+		if ( preg_match( '~ID NOT IN \( ([0-9,]+) \)~', $sql, $match ) ) {
+			$excluded = array_map( 'intval', explode( ',', $match[1] ) );
+		}
+
+		$limit = preg_match( '~LIMIT (\d+)~', $sql, $match ) ? (int) $match[1] : count( $this->table );
+		$rows  = array();
+
+		foreach ( $this->table as $row ) {
+			if ( in_array( (int) $row->ID, $excluded, true ) ) {
+				continue;
+			}
+
+			$rows[] = $row;
+		}
+
+		return array_slice( $rows, 0, $limit );
+	}
 }
 
 function get_users( $args = array() ) {
@@ -424,6 +486,184 @@ check(
 	'and the evidence says the hour is unknown rather than showing 1970',
 	1 === count( $undated ) && false !== strpos( $undated[0]['evidence'], 'unknown' ),
 	'gmdate( 0 ) would read as a reset requested in 1970'
+);
+
+// ------------------------------------------- an account the list does not show
+
+/*
+ * The rule this plugin most needed and did not have.
+ *
+ * On the real site `count_users()` returned 11 while `get_users()` returned ten rows,
+ * because a plugin hooked to `pre_user_query` removed its own administrator from every list
+ * WordPress draws. The screen rendered the difference as `capped` — the ordinary "there are
+ * more accounts than we listed" state — and every rule in the catalogue stayed silent.
+ */
+
+/**
+ * A row as the users table would return it.
+ *
+ * @param int    $id    Account id.
+ * @param string $login Login.
+ * @return object
+ */
+function table_row( $id, $login ) {
+	return (object) array(
+		'ID'         => $id,
+		'user_login' => $login,
+	);
+}
+
+/**
+ * The hidden-account findings for the site as it currently stands.
+ *
+ * @return array
+ */
+function hidden() {
+	$found = array();
+
+	foreach ( WPAQS_Accounts::findings( WPAQS_Accounts::all() ) as $finding ) {
+		if ( 'hidden_account_discrepancy' === $finding['rule'] ) {
+			$found[] = $finding;
+		}
+	}
+
+	return $found;
+}
+
+$GLOBALS['wpdb'] = new Stub_WPDB();
+
+// The table holds every listed account and one more. The listing does not, and the count
+// does — which is the whole shape of the thing.
+$GLOBALS['wpdb']->table = array();
+
+foreach ( array_keys( $GLOBALS['users'] ) as $id ) {
+	$GLOBALS['wpdb']->table[] = table_row( $id, $GLOBALS['users'][ $id ]->user_login );
+}
+
+$GLOBALS['wpdb']->table[] = table_row( 4242, 'christian.walley' );
+$GLOBALS['counted']       = count( $GLOBALS['users'] ) + 1;
+
+$hidden = hidden();
+
+check( 'an account in the table and not in the list is reported', 1 === count( $hidden ), (string) count( $hidden ) );
+check( 'as critical', 1 === count( $hidden ) && 'critical' === $hidden[0]['severity'] );
+check( 'against the account itself, so it shares that account\'s subject', 1 === count( $hidden ) && 'user:4242' === $hidden[0]['target'], $hidden[0]['target'] );
+check( 'and the evidence names the login', 1 === count( $hidden ) && false !== strpos( $hidden[0]['evidence'], 'christian.walley' ) );
+check( 'and the id', 1 === count( $hidden ) && false !== strpos( $hidden[0]['evidence'], 'id=4242' ) );
+check(
+	'and both numbers that disagree',
+	1 === count( $hidden ) && false !== strpos( $hidden[0]['evidence'], 'counted=7' ) && false !== strpos( $hidden[0]['evidence'], 'listed=6' ),
+	$hidden[0]['evidence']
+);
+
+check(
+	'the cross-check excludes the accounts already listed',
+	false !== strpos( end( $GLOBALS['wpdb']->queries ), 'ID NOT IN' ),
+	'without that it reports every account on the site'
+);
+
+check(
+	'and is bounded, so a site with thousands of accounts cannot be made to print them all',
+	false !== strpos( end( $GLOBALS['wpdb']->queries ), 'LIMIT ' . WPAQS_Accounts::MAX_MISSING ),
+	end( $GLOBALS['wpdb']->queries )
+);
+
+// More than one hidden account is more than one finding, each naming its own.
+$GLOBALS['wpdb']->table[] = table_row( 4243, 'lilivesteam' );
+$GLOBALS['counted']       = count( $GLOBALS['users'] ) + 2;
+
+check( 'two hidden accounts are two findings', 2 === count( hidden() ), (string) count( hidden() ) );
+
+array_pop( $GLOBALS['wpdb']->table );
+
+// ---- the benign cases, and there are four that matter
+
+// 1. The count and the list agree. This is every healthy site, and the query must not even
+// run: on a site with a hundred thousand accounts this read happens on every page view of
+// the screen.
+$GLOBALS['counted']           = count( $GLOBALS['users'] );
+$GLOBALS['wpdb']->queries     = array();
+
+check(
+	'a site whose count matches its list is silent',
+	array() === hidden(),
+	'this is the state of every site that is not compromised'
+);
+
+check(
+	'and the table is not queried at all',
+	array() === $GLOBALS['wpdb']->queries,
+	'the discrepancy is the trigger, so a healthy site pays nothing for this rule'
+);
+
+// 2. An ordinarily capped site. Past WPAQS_MAX_USERS the count is *supposed* to exceed the
+// rows, and a membership site would otherwise report every account past the five hundredth.
+$capped = array();
+
+for ( $i = 0; $i < WPAQS_MAX_USERS; $i++ ) {
+	$capped[] = array( 'id' => 1000 + $i );
+}
+
+check(
+	'a capped list is silent however far the count exceeds it',
+	array() === WPAQS_Accounts::missing( $capped, 90000 ),
+	'above the cap the count is meant to be larger — that is what the cap means'
+);
+
+check(
+	'and nothing was queried for it',
+	array() === $GLOBALS['wpdb']->queries,
+	'the guard is before the query, not after it'
+);
+
+// 3. The count disagrees and the table agrees with the list. count_users() is served from a
+// cached total on a large install, so this is a stale count rather than a hidden account —
+// and reporting it would put this plugin's loudest severity on a site with nothing wrong.
+array_pop( $GLOBALS['wpdb']->table );
+
+$GLOBALS['counted'] = count( $GLOBALS['users'] ) + 5;
+
+check(
+	'a count ahead of a list the table agrees with is silent',
+	array() === hidden(),
+	'wp_update_user_counts() is behind, and that is not a hidden administrator'
+);
+
+check(
+	'and the table was read before deciding that',
+	! empty( $GLOBALS['wpdb']->queries ),
+	'the corroboration is the finding; without it this rule is a guess'
+);
+
+// 4. A network. wp_users is shared by every site on a multisite install while the listing is
+// one site's, so the difference there is ordinary membership of another site — the check
+// would report the whole network, on every site in it.
+$GLOBALS['network']       = true;
+$GLOBALS['wpdb']->table[] = table_row( 4244, 'someone-elses-site');
+$GLOBALS['counted']       = count( $GLOBALS['users'] ) + 1;
+$GLOBALS['wpdb']->queries = array();
+
+check(
+	'a network is silent, because the users table there is not this site\'s list',
+	array() === hidden(),
+	'it would report every account on the network'
+);
+
+check(
+	'and is not queried',
+	array() === $GLOBALS['wpdb']->queries
+);
+
+$GLOBALS['network'] = false;
+
+// A site with no $wpdb to read cannot corroborate anything, and a rule that fires on the
+// difference alone is the rule that read `capped` as ordinary in the first place.
+unset( $GLOBALS['wpdb'] );
+
+check(
+	'with no database handle the rule says nothing',
+	array() === WPAQS_Accounts::missing( array( array( 'id' => 1 ) ), 99 ),
+	'an uncorroborated difference is what this rule exists to stop reporting as ordinary'
 );
 
 finish();
