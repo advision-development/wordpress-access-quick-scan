@@ -5,7 +5,7 @@ left. Ordered by what blocks what, not by size.
 
 The console's own list is in `../hawkeye/WPSEC-PENDING.md` and is not repeated here.
 
-**Last reviewed:** 2026-08-25 (0.11.0 built and installed on two sites, not tagged)
+**Last reviewed:** 2026-09-07 (0.13.0 on a branch, four new rules, nothing tagged since v0.9.0)
 
 ---
 
@@ -24,6 +24,38 @@ write it only where it happened.
 
 And the reason it was invisible from both ends: `requested_at` lives in an option, so
 deactivating and reactivating the plugin does not clear it. The usual remedy did nothing.
+
+### 0.13.0 carries four new rules and is not tagged
+
+**No site in the fleet runs any of these four rules until a tag is cut.** The updater serves
+the release zip, so every screen will go on saying it is up to date while none of the four
+runs — and the newest tag in this repository is `v0.9.0`, four releases behind the header. The
+0.11.0 and 0.12.0 items below are the same debt and go out with this one.
+
+0.13.0 adds `hidden_account_discrepancy`, `excessive_sessions`,
+`application_password_suspicious_name` and `client_ip_not_recorded`. The first is the one that
+matters most: on the site they come from, this plugin held the contradiction in its own
+payload — `total: 11` beside ten rows — and rendered it as `capped`.
+
+**Both plugins release together.** A fleet running one half of the pair reports half a site.
+
+```
+./build.sh
+git tag v0.13.0 && git push origin v0.13.0
+```
+
+### The session threshold lives in two repositories and only one of them checks it
+
+`WPAQS_Sessions::MAX_SESSIONS` is ten because `WPMQS_Database_Scanner::MAX_SESSIONS` is ten,
+and the two have to agree: both reports are read side by side, about the same account, on the
+same day. `test-sessions.php` asserts **this** side is ten and cannot see the other side at
+all, so somebody raising the sibling's threshold gets a green build in both repositories and a
+fleet where one plugin calls eleven sessions excessive and the other calls it ordinary.
+
+The mechanism that already solves this shape here is `tests/test-shared.php`, which proves two
+files identical across the pair by hash. A constant is not a file, and the obvious fix —
+moving the number into one of the shared files — would put a detection threshold inside the
+fleet transport, where it does not belong. Recorded rather than solved.
 
 ### 0.11.0 is built and installed, and not tagged
 
