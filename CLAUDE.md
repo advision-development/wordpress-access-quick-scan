@@ -26,6 +26,17 @@ channel needs, and an intent it cannot construct is an intent it cannot get wron
 **A refusal is reported, never omitted.** "No button" and "a button that would be refused,
 and here is why" are different answers, and only the second stops somebody looking for it.
 
+**One rule ships with no action at all, and it is the exception that has to be argued for.**
+`client_ip_not_recorded` says the host's reverse proxy is not passing the client address to
+WordPress, which silently disables three of the other rules. What clears it is a change to
+that proxy — so there is no action id, and nothing whose absence needs explaining either:
+inventing one would be inventing an intent the controller does not dispatch. The refusal is
+stated where a person reads it, in the finding's own `recommendation` — which the console
+prints — and on the coverage list on the screen. `offers()` returns the empty array from a
+branch of its own rather than falling through to the `option:` default, because the default
+returning the same thing is an accident of the prefix and not a decision. Same shape as the
+sibling's `ini:` and `rule:` targets.
+
 **The inventory leaves, the credentials do not.** `access_inventory()` sends the accounts,
 the open sessions and the application passwords, so the console's access tab can show what
 the plugin's own screen shows. Three fields are stripped before it goes: the **password

@@ -208,6 +208,93 @@ check_export(
 	'a setting with no action of its own offers nothing — the next step is a line in wp-config.php'
 );
 
+/*
+ * The four rules added in 0.13.0, from the console's side.
+ *
+ * Three of them name a subject the console already understands and carry a real action with
+ * its parameters built. The fourth carries none, and that is the decision worth asserting:
+ * what has to change for `client_ip_not_recorded` is the reverse proxy in front of
+ * WordPress, which this plugin does not configure, so offering a button would be a button
+ * that cannot work. The refusal is stated in the finding's own recommendation, which the
+ * console prints, and in the coverage list on the screen.
+ */
+$hidden = wpaqs_offered( 'user:4242' );
+
+check_export(
+	1 === count( $hidden ) && 'end_sessions' === $hidden[0]['id'] && 4242 === $hidden[0]['params']['user_id'],
+	'an account the list does not show offers ending its sessions, with the account already in the parameters'
+);
+
+check_export(
+	false === strpos( wp_json_encode( $hidden ), 'delete' ),
+	'and nothing offers to delete it — this plugin removes no account, and one being recreated on every request would come back'
+);
+
+check_export(
+	array() === wpaqs_offered( 'option:client_ip' ),
+	'the addresses finding offers nothing, because what has to change is the proxy and this plugin does not configure it'
+);
+
+check_export(
+	array( 'id' => 'option:client_ip', 'kind' => 'setting' ) === wpaqs_subject( 'option:client_ip' ),
+	'and it still names a subject, so the console can group it rather than treat it as loose'
+);
+
+$volume = wpaqs_offered( 'user:9:sessions' );
+
+check_export(
+	1 === count( $volume ) && 'end_sessions' === $volume[0]['id'] && 9 === $volume[0]['params']['user_id'],
+	'a session-volume finding offers ending every session on the account'
+);
+
+check_export(
+	false === strpos( wp_json_encode( $volume ), 'verifier' ),
+	'and 809 sessions do not become 809 verifiers leaving the site'
+);
+
+$hostile = wpaqs_offered( 'user:1:app-password:52ea9b9e' );
+
+check_export(
+	1 === count( $hostile ) && 'revoke_password' === $hostile[0]['id'] && '52ea9b9e' === $hostile[0]['params']['uuid'],
+	'a credential named for what it does offers revoking, which is the only thing that stops one'
+);
+
+// Every finding leaves with the block, whatever the rule. A rule added without a target
+// shape offers() understands would export an empty actions array and read, over there, as a
+// finding nobody can act on.
+$every = WPAQS_Report::to_export_array(
+	array(
+		'findings' => array(
+			array( 'rule' => 'hidden_account_discrepancy', 'target' => 'user:4242', 'severity' => 'critical' ),
+			array( 'rule' => 'excessive_sessions', 'target' => 'user:9:sessions', 'severity' => 'high' ),
+			array( 'rule' => 'application_password_suspicious_name', 'target' => 'user:1:app-password:u-9', 'severity' => 'critical' ),
+			array( 'rule' => 'client_ip_not_recorded', 'target' => 'option:client_ip', 'severity' => 'info' ),
+		),
+	)
+);
+
+$carried = 0;
+
+foreach ( $every['findings'] as $finding ) {
+	if ( array_key_exists( 'actions', $finding ) && array_key_exists( 'subject', $finding ) ) {
+		$carried++;
+	}
+}
+
+check_export( 4 === $carried, 'every new rule exports both the actions block and the subject' );
+
+check_export(
+	3 === count( array_filter( array_map( function ( $finding ) { return count( $finding['actions'] ); }, $every['findings'] ) ) ),
+	'three of the four carry an action; only the one about the proxy carries none'
+);
+
+// The export shape itself. hawkeye keeps a fixed set of top-level keys and drops the rest
+// without a word, so four new rules must arrive as findings and nothing else.
+check_export(
+	array( 'plugin', 'version', 'generated_at', 'site', 'findings', 'access' ) === array_keys( $every ),
+	'the export carries no new top-level key, because the console would drop one silently'
+);
+
 
 /*
  * What a finding is about, as the coarser noun several findings can share.

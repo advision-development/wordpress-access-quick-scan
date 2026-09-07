@@ -36,10 +36,23 @@ class WPAQS_Report {
 
 		$sessions  = array();
 		$passwords = array();
+		// Every address the site recorded, whoever it belongs to. Collected here because the
+		// question it answers is about the host in front of WordPress rather than about any
+		// one account, and no reader that sees a single account could ask it.
+		$addresses = array();
 
 		foreach ( $accounts['rows'] as $row ) {
 			$sessions[ $row['id'] ]  = WPAQS_Sessions::for_user( $row['id'] );
 			$passwords[ $row['id'] ] = WPAQS_App_Passwords::for_user( $row['id'] );
+
+			foreach ( $sessions[ $row['id'] ] as $session ) {
+				// Expired ones included: the proxy behaved the same way when it forwarded them.
+				$addresses[] = isset( $session['ip'] ) ? (string) $session['ip'] : '';
+			}
+
+			foreach ( $passwords[ $row['id'] ] as $password ) {
+				$addresses[] = isset( $password['last_ip'] ) ? (string) $password['last_ip'] : '';
+			}
 
 			$findings = array_merge( $findings, WPAQS_Sessions::findings( $row, $sessions[ $row['id'] ] ) );
 			$findings = array_merge(
@@ -51,6 +64,8 @@ class WPAQS_Report {
 				)
 			);
 		}
+
+		$findings = array_merge( $findings, WPAQS_Sessions::client_ip_findings( $addresses ) );
 
 		return array(
 			// There is no scan, so these bracket the read rather than a run. The console
@@ -227,6 +242,22 @@ class WPAQS_Report {
 			);
 		}
 
+		/*
+		 * Addresses that are not the visitor's. There is no action here and there is no
+		 * button whose absence needs explaining either, which is the same case as the
+		 * sibling's `ini:` and `rule:` targets: what has to change is the reverse proxy in
+		 * front of WordPress, which this plugin does not configure and would be lying to
+		 * offer. The refusal is stated where a person reads it — in the finding's own
+		 * recommendation, which the console prints, and in the coverage list on the screen —
+		 * rather than as an action nothing dispatches.
+		 *
+		 * Explicit rather than left to the `option:` fallback below, because the fallback
+		 * returning the same empty array is an accident of the prefix and not a decision.
+		 */
+		if ( 0 === strpos( $target, 'option:client_ip' ) ) {
+			return array();
+		}
+
 		// A setting with no action of its own: the next step is a line in wp-config.php.
 		if ( 0 === strpos( $target, 'option:' ) ) {
 			return array();
@@ -272,10 +303,18 @@ class WPAQS_Report {
 			);
 		}
 
-		// A pending reset, a lookalike login, a duplicate address, a recent administrator:
-		// every one of these needs a person to confirm something rather than a button. The
-		// account's sessions are the one thing that can be closed without deciding whether
-		// the account itself is legitimate.
+		// A pending reset, a lookalike login, a duplicate address, a recent administrator, an
+		// account the list does not show: every one of these needs a person to confirm
+		// something rather than a button. The account's sessions are the one thing that can be
+		// closed without deciding whether the account itself is legitimate.
+		//
+		// A hidden account is the sharpest case and it changes nothing here. The action a
+		// console would reach for is "remove it", and this plugin deletes no account and
+		// nothing an account created — and against something being recreated on every
+		// request, removing it would not work anyway. Ending its sessions is real, it works
+		// (`get_userdata()` reads the row directly, so `pre_user_query` does not hide it from
+		// the action the way it hid it from the list), and it is what the finding asks for
+		// while the operator finds what is doing the hiding.
 		return array(
 			array(
 				'id'     => 'end_sessions',
