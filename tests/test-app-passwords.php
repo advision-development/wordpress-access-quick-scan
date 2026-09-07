@@ -112,6 +112,108 @@ check(
 		&& false !== strpos( $findings['app_password_foreign_ip|user:1:app-password:u-1']['evidence'], 'none open' )
 );
 
+// ------------------------------------------------------- what the name says
+
+/*
+ * The name is the one field a person chose, and on the real site it read
+ * `panel-auto-infect`. Both address-based checks correctly stayed quiet about it — it was
+ * used, and used from an address the account already had sessions from — so the name was
+ * the only field that said anything, and it said all of it.
+ */
+check( 'panel-auto-infect is a hostile name', WPAQS_App_Passwords::hostile_name( 'panel-auto-infect' ) );
+check( 'so is anything calling itself a shell', WPAQS_App_Passwords::hostile_name( 'wp shell' ) );
+check( 'or a backdoor', WPAQS_App_Passwords::hostile_name( 'Backdoor' ) );
+check( 'or an exploit', WPAQS_App_Passwords::hostile_name( 'exploit-kit' ) );
+check( 'or the two old shell names', WPAQS_App_Passwords::hostile_name( 'c99' ) && WPAQS_App_Passwords::hostile_name( 'r57' ) );
+
+// The benign side, and it is the reason the list is this short. `auto` and `panel` are both
+// in the name this rule exists for and neither is in the list: an automation integration and
+// a hosting control panel are ordinary things to name a credential after, and escalating
+// those to critical puts the loudest severity on a shop's own order sync.
+check(
+	'auto is not enough on its own',
+	! WPAQS_App_Passwords::hostile_name( 'store-auto-sync' ),
+	'every automation integration on the fleet is named something like this'
+);
+
+check( 'and neither is panel', ! WPAQS_App_Passwords::hostile_name( 'hosting panel' ) );
+
+// Word boundaries rather than substrings: "Nutshell CRM sync" contains "shell" and is
+// somebody's actual integration.
+check(
+	'a name that merely contains one of the words is not a match',
+	! WPAQS_App_Passwords::hostile_name( 'Nutshell CRM sync' ),
+	'a substring match makes this rule fire on a real integration'
+);
+
+check( 'nor is Zapier', ! WPAQS_App_Passwords::hostile_name( 'Zapier' ) );
+check( 'nor an unnamed password', ! WPAQS_App_Passwords::hostile_name( '' ) );
+
+// The credential in the state the real one was in: in use, and used from the same address as
+// a live session, so both of the other rules are right to say nothing.
+$GLOBALS['passwords'][3] = array(
+	array( 'uuid' => 'u-9', 'name' => 'panel-auto-infect', 'created' => 1755000000, 'last_used' => 1755000060, 'last_ip' => '203.0.113.9' ),
+	array( 'uuid' => 'u-10', 'name' => 'Nutshell CRM sync', 'created' => 1740000000, 'last_used' => 1750000000, 'last_ip' => '203.0.113.9' ),
+);
+
+$named = array();
+
+foreach ( WPAQS_App_Passwords::findings( array( 'id' => 3, 'login' => 'support' ), WPAQS_App_Passwords::for_user( 3 ), array( '203.0.113.9' ) ) as $finding ) {
+	$named[ $finding['rule'] . '|' . $finding['target'] ] = $finding;
+}
+
+check(
+	'the hostile name is reported even though every other check is silent about it',
+	isset( $named['application_password_suspicious_name|user:3:app-password:u-9'] ),
+	'it was used, and from a familiar address — which is why nothing else fired'
+);
+
+check(
+	'as critical, which is the sibling plugin\'s severity for the same rule',
+	isset( $named['application_password_suspicious_name|user:3:app-password:u-9'] )
+		&& 'critical' === $named['application_password_suspicious_name|user:3:app-password:u-9']['severity']
+);
+
+check(
+	'and the detail quotes the name',
+	isset( $named['application_password_suspicious_name|user:3:app-password:u-9'] )
+		&& false !== strpos( $named['application_password_suspicious_name|user:3:app-password:u-9']['detail'], 'panel-auto-infect' ),
+	'the name is the finding'
+);
+
+check(
+	'the integration beside it stays silent',
+	! isset( $named['application_password_suspicious_name|user:3:app-password:u-10'] ),
+	'"Nutshell CRM sync" contains "shell"'
+);
+
+check(
+	'and nothing else fires on the hostile one either',
+	! isset( $named['app_password_unused|user:3:app-password:u-9'] )
+		&& ! isset( $named['app_password_foreign_ip|user:3:app-password:u-9'] ),
+	'two findings about one fact is what grouping exists to stop'
+);
+
+// The name is checked whatever the answer to the other two rules is: a hostile name on a
+// credential nobody has used yet is the same credential.
+$GLOBALS['passwords'][4] = array(
+	array( 'uuid' => 'u-11', 'name' => 'backdoor', 'created' => 1755000000, 'last_used' => 0, 'last_ip' => '' ),
+);
+
+$unused = array();
+
+foreach ( WPAQS_App_Passwords::findings( array( 'id' => 4, 'login' => 'support' ), WPAQS_App_Passwords::for_user( 4 ), array() ) as $finding ) {
+	$unused[ $finding['rule'] ] = $finding;
+}
+
+check(
+	'a hostile name on an unused credential is still reported',
+	isset( $unused['application_password_suspicious_name'] ),
+	'the check sits outside the used/unused branch for exactly this'
+);
+
+check( 'and the unused rule reports it too, because that is a second fact', isset( $unused['app_password_unused'] ) );
+
 // -------------------------------------------------------------------- timestamps
 
 check( 'a timestamp renders as UTC', '2025-06-15 15:06 UTC' === WPAQS_App_Passwords::stamp( 1750000000 ), WPAQS_App_Passwords::stamp( 1750000000 ) );
