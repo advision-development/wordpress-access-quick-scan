@@ -228,13 +228,37 @@ check(
 );
 
 // "Not checked" is a distinct verdict from "clear", and a findings list cannot express the
-// difference. All four statements are rendered, not summarised away.
-foreach ( array( 'Failed logins.', 'Login history.', 'Whether an address is suspicious.', 'Files, WordPress core' ) as $statement ) {
+// difference. Every statement is rendered, not summarised away.
+foreach ( array( 'Failed logins.', 'Login history.', 'Whether an address is suspicious.', 'Files, WordPress core', 'Whether the addresses above are the visitor', 'Whether the account list is complete.' ) as $statement ) {
 	check(
 		'the screen states what it cannot check: ' . $statement,
 		false !== strpos( $source, $statement )
 	);
 }
+
+// Two of those statements depend on the site rather than on the plugin: whether the addresses
+// shown are the visitor's, and whether the direct cross-check of the users table can run.
+// Both are stated either way — a caveat that only appears when it bites is one nobody has
+// read before it does — and the wording changes when it is the case here, because "this rule
+// can be defeated" and "this rule is defeated on this site" are different warnings. Which is
+// why the list has to be given the findings.
+check(
+	'the coverage list is told what this read found',
+	false !== strpos( $page_code, 'self::render_coverage( $findings )' ),
+	'a list that cannot see the findings cannot say which of its caveats applies here'
+);
+
+check(
+	'and it says so plainly when the addresses on this site really are meaningless',
+	false !== strpos( $source, 'On this site they are not.' ),
+	'three of the six rules were silently disabled and the screen gave no hint of it'
+);
+
+check(
+	'the cross-check being off on a network is stated rather than left as a silence',
+	false !== strpos( $source, 'Not on a network.' ),
+	'"no finding" and "not checked" are the two things this plugin exists to keep apart'
+);
 
 // An empty findings list must not read as a clean bill of health.
 check(

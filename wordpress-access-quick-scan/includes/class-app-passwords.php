@@ -107,6 +107,30 @@ class WPAQS_App_Passwords {
 		foreach ( $passwords as $password ) {
 			$label = '' === $password['name'] ? $password['uuid'] : $password['name'];
 
+			/*
+			 * Checked before the used/unused branch below, and outside it, because the two
+			 * rules are about different things and this one holds whatever the answer to the
+			 * other is. The credential this exists for was in daily use.
+			 *
+			 * On the real site `panel-auto-infect` was created and first used in the same
+			 * minute, and both of the checks below correctly stayed quiet about it: it had a
+			 * `last_used`, so it was not unused, and it was last used from an address the
+			 * account already had open sessions from, so the address was not unfamiliar. The
+			 * name was the only field that said anything, and it said all of it.
+			 */
+			if ( self::hostile_name( $password['name'] ) ) {
+				$findings[] = WPAQS_Findings::make(
+					'application_password_suspicious_name',
+					'user:' . $account['id'] . ':app-password:' . $password['uuid'],
+					sprintf( 'login=%1$s name=%2$s created=%3$s last_used=%4$s', $account['login'], $label, self::stamp( $password['created'] ), self::stamp( $password['last_used'] ) ),
+					sprintf(
+						/* translators: %s: the label given to the application password. */
+						__( 'Named "%s".', 'wpaqs' ),
+						$password['name']
+					)
+				);
+			}
+
 			if ( 0 === $password['last_used'] ) {
 				$findings[] = WPAQS_Findings::make(
 					'app_password_unused',
@@ -142,6 +166,32 @@ class WPAQS_App_Passwords {
 		}
 
 		return $findings;
+	}
+
+	/**
+	 * Whether the label on a credential names what it was for.
+	 *
+	 * The same expression as the sibling's `hostile_credential_name()`, deliberately, and the
+	 * reasoning is worth carrying with it rather than leaving next door.
+	 *
+	 * **The list is narrow, and narrower than the one it was cut from.** `auto` and `panel`
+	 * were both proposed — the credential this rule exists for was called
+	 * `panel-auto-infect` — and both were rejected: an automation integration and a hosting
+	 * control panel are ordinary things to name a credential after, and escalating those to
+	 * critical would put this plugin's loudest severity on a shop's own order sync. `infect`
+	 * is the word in that name that appears in a credential label for one reason.
+	 *
+	 * **Matched on word boundaries rather than as substrings**, because "Nutshell CRM sync"
+	 * contains "shell" and is somebody's actual integration.
+	 *
+	 * High-entropy names were also proposed and are not implemented: a UUID-named integration
+	 * and a person mashing the keyboard both look like one, and neither is a compromise.
+	 *
+	 * @param string $name The label given to the application password.
+	 * @return bool
+	 */
+	public static function hostile_name( $name ) {
+		return 1 === preg_match( '~\b(?:infect|shell|backdoor|webshell|hack|exploit|bypass|c99|r57)\b~i', (string) $name );
 	}
 
 	/**

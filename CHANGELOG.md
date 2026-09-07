@@ -3,6 +3,103 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.13.0
+
+**Four rules, from one site where this plugin found one thing.** It was installed on a
+restored, still-infected WordPress alongside the sibling and run against the real artefacts.
+The sibling produced 98 findings. This plugin produced one — `file_editing_enabled`, at
+medium — on a site with a hidden administrator, 809 live sessions on one account and an
+application password named `panel-auto-infect`. Every rule in the catalogue stayed silent,
+and each silence had a specific cause. These are the four.
+
+**An account the list does not show, and the account list no longer takes the malware's word
+for it.** `count_users()` said 11 while `get_users()` returned ten rows, because the hidden
+plugin filtered `pre_user_query` — which changes every list WordPress draws and does not
+touch a `COUNT(*)`. The export already carried both numbers and the screen rendered the
+difference as `capped`: the ordinary "there are more accounts than we listed" state.
+
+`hidden_account_discrepancy` (critical) fires on that difference, and it does not fire on the
+difference alone. Every account query in this plugin went through `get_users()`, which on a
+compromised site is asking the malware what accounts exist, so `WPAQS_Accounts::missing()`
+now reads `{$wpdb->users}` directly — one query no PHP filter sits in front of — and the
+finding names the accounts present in the table and absent from the list, by login and id,
+one finding each against `user:<id>`. `get_users()` is still the listing: it carries the
+roles, the capabilities and the meta that a raw row does not.
+
+*The false positives it is shaped around.* Above `WPAQS_MAX_USERS` the count is **supposed**
+to exceed the rows, so a capped list is silent — otherwise every membership site in the fleet
+reports every account past the five hundredth. A count ahead of a list the table agrees with
+is a stale count rather than a hidden account: `count_users()` is served from a cached total
+on a large install and `wp_update_user_counts()` is what refreshes it, so corroboration is
+required rather than assumed. And it does not run on a network at all, because
+`{$wpdb->users}` is shared by every site on a multisite install while the listing is one
+site's — the check would report the whole network, on every site in it. The screen says so,
+where it would otherwise be a silence.
+
+*The cost.* The difference is the trigger, so a healthy site never runs the query. When it
+does run it runs once, reads two indexed columns, excludes the accounts already listed, and
+is bounded at 20 rows.
+
+**809 live sessions on one administrator produced nothing.** There was no rule about session
+volume: `sessions_many_networks` needs three separate networks, and 809 sessions from one
+address is one network. `excessive_sessions` (high) reports the count on its own, above ten
+open sessions.
+
+Ten is `WPMQS_Database_Scanner::MAX_SESSIONS`, deliberately, and `test-sessions.php` asserts
+the two agree. Both reports are read side by side, about the same account, on the same day;
+one plugin calling eleven sessions excessive while the other calls it ordinary leaves the
+operator deciding which to believe, and the answer would be an artefact of who last touched a
+constant. Ten is generous for a person — a phone, a laptop, a browser they do not normally
+use, a few nobody signed out of — and it is not what an account looks like after its
+credentials have been used from somewhere else. What is **not** shared is what gets counted:
+the sibling counts every row in the session meta, this counts the open ones, because an
+account carrying two hundred lapsed tokens WordPress never pruned is history rather than two
+hundred credentials working now.
+
+**`panel-auto-infect` was not flagged, and this is the plugin whose whole subject is
+application passwords.** It was used, and used from an address the account already had
+sessions from, so `app_password_unused` and `app_password_foreign_ip` were both right to stay
+quiet. The name was the only field that said anything.
+`application_password_suspicious_name` (critical) is ported from the sibling with its wording
+and its severity, and the check sits outside the used/unused branch because the two rules are
+about different things.
+
+The word list stays narrow, and narrower than the name that drove it: `auto` and `panel` are
+both in `panel-auto-infect` and neither is in the list, because an automation integration and
+a hosting control panel are ordinary things to name a credential after. Matched on word
+boundaries, because "Nutshell CRM sync" contains "shell" and is somebody's actual integration.
+
+**Every address on that site was `127.0.0.1`, and nothing said so.** The platform's reverse
+proxy does not pass the client address through to WordPress, which silently disables
+`app_password_foreign_ip` and `sessions_many_networks` and takes most of the value out of
+`non_browser_session` — three of the six rules, comparing one address with itself.
+`client_ip_not_recorded` (info) says it plainly: every address recorded against a session or
+an application password on this site is loopback, or one single private address.
+
+It is on the coverage list too, and stated either way — a caveat that only appears when it
+bites is one nobody has read before it does — with the wording changing when it is the case
+here, because "this rule can be defeated" and "this rule is defeated on this site" are
+different warnings. One private address counts, because a site everybody reaches through one
+office gateway is the same broken arrangement; two distinct private addresses do not, because
+an address that varies is an address those rules can read. And it needs at least two recorded
+addresses: a WordPress somebody installed on a laptop an hour ago has one session from
+`127.0.0.1` and nothing wrong with it. Counted in rows rather than in distinct values,
+because a threshold on distinct values would have needed two and the real site had one.
+
+`client_ip_not_recorded` is the one new finding that carries no action. What has to change is
+the proxy, which this plugin does not configure, and a button that cannot work is worse than
+no button — so the refusal is in the recommendation the console prints and on the coverage
+list, and `offers()` says why in a branch of its own rather than falling through to the
+`option:` default by accident. The other three carry `end_sessions` or `revoke_password` with
+their parameters already built, through the path that was already there.
+
+**The export shape is unchanged.** Four new rules are four new findings and nothing else:
+hawkeye's ingest keeps a fixed set of top-level keys and drops the rest without a word, so a
+new one would land nowhere. `test-report.php` asserts the key list.
+
+**`test-report.php` is in `tests/run.sh`.** It was written for 0.10.0 and never added, so the
+assertions keeping the session verifier out of the export have been passing unread since.
+
 ## 0.12.0
 
 **A finding names what it is about, not only what it points at.** Every exported finding now

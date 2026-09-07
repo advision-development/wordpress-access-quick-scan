@@ -67,9 +67,20 @@ class WPAQS_Accounts {
 	);
 
 	/**
+	 * How many accounts the direct cross-check will name.
+	 *
+	 * A bound rather than a preference. The cross-check exists to say "the list is missing
+	 * these", and one hidden administrator is the case it was written for — a site where the
+	 * answer is hundreds has a different problem, and printing hundreds of logins into a
+	 * finding is not how anybody would read it. The count in the evidence is not capped, so a
+	 * larger answer still says how large.
+	 */
+	const MAX_MISSING = 20;
+
+	/**
 	 * Every account, capped.
 	 *
-	 * @return array array( rows, total, capped )
+	 * @return array array( rows, total, capped, missing )
 	 */
 	public static function all() {
 		$total = self::count_users();
@@ -103,7 +114,108 @@ class WPAQS_Accounts {
 			'rows'   => $rows,
 			'total'  => $total,
 			'capped' => $total > count( $rows ),
+			// The corroboration, not a replacement for the listing above. See missing().
+			'missing' => self::missing( $rows, $total ),
 		);
+	}
+
+	/**
+	 * Accounts in the users table that the account list did not return.
+	 *
+	 * Every account query in this plugin goes through `get_users()`, and on a compromised
+	 * site that is asking the malware what accounts exist. A plugin hooked to
+	 * `pre_user_query` takes its own administrator out of every list WordPress draws while
+	 * `count_users()` — a plain `COUNT(*)`, with no `WP_User_Query` to filter — goes on
+	 * counting it. On the site this comes from the payload already carried `total: 11` beside
+	 * ten rows and the screen rendered the difference as `capped`, which is the ordinary
+	 * "there are more accounts than we listed" state.
+	 *
+	 * So the count disagreeing with the list is the trigger, and this is the evidence: one
+	 * query straight at `{$wpdb->users}`, which no PHP filter sits in front of, naming the
+	 * logins and ids the list left out. `get_users()` stays the primary listing — it is what
+	 * carries roles, capabilities and meta, and a raw row carries none of that.
+	 *
+	 * **Three guards, and each one is about a false positive rather than about cost alone.**
+	 *
+	 * The list must not be capped. Above `WPAQS_MAX_USERS` the count is *supposed* to exceed
+	 * the rows, and every membership site in the fleet would report every account past the
+	 * five hundredth.
+	 *
+	 * The count must exceed the rows before anything is queried, so on a healthy site this
+	 * costs nothing at all. When it does run, it runs once per read, is bounded by
+	 * `MAX_MISSING` rows, and reads two indexed columns — not `get_users()` a second time.
+	 *
+	 * And it does not run on a network. `{$wpdb->users}` is shared by every site on a
+	 * multisite install while the listing is per-site, so the difference there is ordinary
+	 * membership of another site rather than anything hidden — it would report every account
+	 * on the network on every site in it. The coverage list says so, because "no finding" and
+	 * "not checked" are the two things this plugin exists to keep apart.
+	 *
+	 * @param array $rows  Account rows the listing returned.
+	 * @param int   $total What count_users() says the site holds.
+	 * @return array Rows of array( id, login ), and an empty array when nothing is missing
+	 *               or when the cross-check cannot answer.
+	 */
+	public static function missing( array $rows, $total ) {
+		global $wpdb;
+
+		$listed = count( $rows );
+
+		if ( (int) $total <= $listed ) {
+			return array();
+		}
+
+		if ( $listed >= WPAQS_MAX_USERS ) {
+			return array();
+		}
+
+		if ( function_exists( 'is_multisite' ) && is_multisite() ) {
+			return array();
+		}
+
+		if ( ! isset( $wpdb ) || ! is_object( $wpdb ) || ! isset( $wpdb->users ) ) {
+			return array();
+		}
+
+		$ids = array();
+
+		foreach ( $rows as $row ) {
+			$id = isset( $row['id'] ) ? (int) $row['id'] : 0;
+
+			if ( $id > 0 ) {
+				$ids[] = $id;
+			}
+		}
+
+		// Built from integers this method cast itself rather than through prepare(), because
+		// prepare() has no placeholder for a list and the alternative — one query per listed
+		// account — is the expensive shape this comment exists to rule out. Nothing here came
+		// from a request.
+		$sql = 'SELECT ID, user_login FROM ' . $wpdb->users;
+
+		if ( ! empty( $ids ) ) {
+			$sql .= ' WHERE ID NOT IN ( ' . implode( ',', $ids ) . ' )';
+		}
+
+		$sql .= ' ORDER BY ID ASC LIMIT ' . (int) self::MAX_MISSING;
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- the point of this query is that nothing sits between it and the table.
+		$found = $wpdb->get_results( $sql );
+
+		if ( ! is_array( $found ) ) {
+			return array();
+		}
+
+		$missing = array();
+
+		foreach ( $found as $row ) {
+			$missing[] = array(
+				'id'    => isset( $row->ID ) ? (int) $row->ID : 0,
+				'login' => isset( $row->user_login ) ? (string) $row->user_login : '',
+			);
+		}
+
+		return $missing;
 	}
 
 	/**
@@ -188,6 +300,44 @@ class WPAQS_Accounts {
 					sprintf( 'login=%1$s registered=%2$s', $row['login'], $row['registered'] )
 				);
 			}
+		}
+
+		/*
+		 * The count knows about an account the list does not.
+		 *
+		 * Reported per account rather than once per site, and that is what the target buys:
+		 * `user:<id>` puts the account under the same subject as everything else about it and
+		 * gives the finding the one action that can be offered against an account without
+		 * deciding whether it is legitimate. A single site-wide finding would name the logins
+		 * in a sentence and offer nothing.
+		 *
+		 * It fires only where the direct read of the users table corroborates the difference.
+		 * A count that disagrees with a list nobody filtered is a stale count — `count_users()`
+		 * is served from a cached total on a large install, and `wp_update_user_counts()` is
+		 * what refreshes it — and reporting that as a hidden administrator would be this
+		 * plugin's loudest severity on a site with nothing wrong. When the table agrees with
+		 * the list, the list is right and the count is behind.
+		 */
+		$missing = isset( $accounts['missing'] ) ? (array) $accounts['missing'] : array();
+
+		foreach ( $missing as $row ) {
+			$findings[] = WPAQS_Findings::make(
+				'hidden_account_discrepancy',
+				'user:' . (int) $row['id'],
+				sprintf(
+					'login=%1$s id=%2$d counted=%3$d listed=%4$d',
+					'' === $row['login'] ? 'unknown' : $row['login'],
+					(int) $row['id'],
+					isset( $accounts['total'] ) ? (int) $accounts['total'] : 0,
+					count( $accounts['rows'] )
+				),
+				sprintf(
+					/* translators: 1: account login, 2: numeric account id. */
+					__( 'Present in the users table as %1$s (id %2$d) and absent from the list above.', 'wpaqs' ),
+					'' === $row['login'] ? __( 'an account with no login', 'wpaqs' ) : $row['login'],
+					(int) $row['id']
+				)
+			);
 		}
 
 		foreach ( self::duplicate_emails( $accounts ) as $email => $logins ) {

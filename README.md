@@ -56,16 +56,20 @@ guessing which one you would be ending.
 
 ## What stands out
 
-Six findings, at `critical`, `high`, `medium` and `info`:
+Ten findings, at `critical`, `high`, `medium` and `info`:
 
 | Finding | Why |
 |---|---|
+| An account the account list does not show | `count_users()` is a `COUNT(*)` and the list is a `WP_User_Query`, so a plugin hooked to `pre_user_query` changes the second and not the first. Reading `wp_users` directly names the account the list left out — on a real site, a hidden administrator being recreated on every request |
 | Capabilities that come from no role | The Users screen cannot show these. **Not proof of anything** — `add_cap()` is legitimate and plugins use it — so it is a shortlist to confirm |
 | Registration open **and** new accounts privileged | Either alone is ordinary. Together, a stranger holds that role by filling in a form |
 | A live session opened by something that is not a browser | `curl`, a scripting library, or no user agent at all. A person signing in does not produce this |
 | An application password never used, or last used from an address the account has no session from | The first is a key nobody watches; the second is what both a server integration and a stolen credential look like |
+| An application password named for what it does | The label is the one field a person chose. On a real site one read `panel-auto-infect`, was in daily use from a familiar address, and was therefore the only thing about it that said anything |
+| More live sessions on one account than a person uses | Above ten open sessions the count is the signal on its own. The worst seen was 809 on one administrator, from one address — which no rule about *where* sessions come from can see |
 | A password reset requested and never completed | `user_activation_key` still holds `time():hash`, so a link was issued and not used. On an administrator, either a locked-out colleague or an attempt — and one of the few dated events core keeps |
 | An administrator registered in the last 30 days | Context for reading the list, not an accusation |
+| Every address on the site is loopback, or one single private address | The host's reverse proxy is not passing the client address through, so the three rules above that compare addresses are comparing one address with itself. `info`, and the most important `info` here: it turns "no finding" into "not checked" |
 
 ## What it cannot check
 
@@ -77,6 +81,15 @@ Stated on the screen too, because "nothing found" is not the same as "nothing th
   This plugin holds no opinion about any of them and asks nothing about them. It does
   make network requests — to the update check, and, once enrolled, to the fleet console
   it reports to — but never about an address it found.
+- **Whether the addresses shown are the visitor's.** WordPress records whatever address the
+  connection appears to come from, which behind a reverse proxy that does not forward the
+  client address is the proxy. The screen says which of the two this site is doing, because
+  three of the rules read addresses and stop working without it. No header is guessed at: a
+  client that sets its own `X-Forwarded-For` would then be choosing what this screen reports.
+- **Whether the account list is complete, on a network.** The count of accounts is compared
+  against `wp_users` directly, which is what catches an account hidden from every list
+  WordPress draws — but on multisite that table is shared by every site while the list is one
+  site's, so the comparison is switched off there and the screen says so.
 - **Files, core, and hardening settings.** A different question and a different plugin.
 
 ## Only what is active
@@ -136,7 +149,7 @@ destroys the account's posts, and those posts are the record of what it did.
 ./tests/run.sh
 ```
 
-665 assertions across fourteen harnesses, no WordPress install needed — the functions it touches are stubbed in
+820 assertions across fifteen harnesses, no WordPress install needed — the functions it touches are stubbed in
 `tests/wp-stubs.php`.
 
 Every rule ships with the benign case that must stay silent. A rule without a
@@ -161,7 +174,9 @@ that cannot be reached leaves the report where it is.
 ## Known limitations
 
 - **Multisite is read but not fully modelled.** Both actions require
-  `manage_network_users` there, but the account list is per-site.
+  `manage_network_users` there, but the account list is per-site — which is also why the
+  direct cross-check of `wp_users` does not run on a network: that table is the whole
+  network's.
 - **The account list is capped** at 500, newest first. When the cap is reached the screen
   says so and names both numbers rather than truncating quietly.
 - **No scheduling and no email.** Somebody opens the screen. If that turns out to be the

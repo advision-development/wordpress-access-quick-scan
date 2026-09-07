@@ -113,7 +113,7 @@ class WPAQS_Admin_Page {
 			<?php self::render_code_holders( $accounts ); ?>
 			<?php self::render_accounts( $accounts, $sessions ); ?>
 			<?php self::render_passwords( $accounts, $passwords ); ?>
-			<?php self::render_coverage(); ?>
+			<?php self::render_coverage( $findings ); ?>
 
 			<?php self::render_section_heading( __( 'Settings', 'wpaqs' ) ); ?>
 			<?php WPAQS_Fleet_Panel::render(); ?>
@@ -1036,9 +1036,26 @@ class WPAQS_Admin_Page {
 	 * Stated, never omitted. A findings list cannot tell "checked and clean" from "never
 	 * checked", and every one of these is the second thing.
 	 *
+	 * Two of them are read off the findings rather than written down here, because whether
+	 * they apply is a fact about this site: whether the addresses above are the visitor's,
+	 * and whether the direct cross-check of the users table could run. Both are stated
+	 * either way — a caveat that only appears when it bites is one nobody has read before it
+	 * does — and the sentence changes when it is the case here, because "this rule can be
+	 * defeated" and "this rule is defeated on this site" are not the same warning.
+	 *
+	 * @param array $findings The findings from this read.
 	 * @return void
 	 */
-	private static function render_coverage() {
+	private static function render_coverage( array $findings = array() ) {
+		$proxied = false;
+
+		foreach ( $findings as $finding ) {
+			if ( isset( $finding['rule'] ) && 'client_ip_not_recorded' === $finding['rule'] ) {
+				$proxied = true;
+			}
+		}
+
+		$network = function_exists( 'is_multisite' ) && is_multisite();
 		?>
 		<?php // Closed by default. Reference material, and the findings are what the page is
 			// for — but never removed, because "nothing found" and "nothing checked" are
@@ -1046,7 +1063,7 @@ class WPAQS_Admin_Page {
 		<details class="wpaqs-card wpaqs-collapsible">
 			<summary>
 				<h2><?php esc_html_e( 'What this does not check', 'wpaqs' ); ?></h2>
-				<span class="description"><?php esc_html_e( 'four things, and why', 'wpaqs' ); ?></span>
+				<span class="description"><?php esc_html_e( 'six things, and why', 'wpaqs' ); ?></span>
 			</summary>
 
 			<ul class="wpaqs-coverage">
@@ -1061,6 +1078,22 @@ class WPAQS_Admin_Page {
 				<li>
 					<strong><?php esc_html_e( 'Whether an address is suspicious.', 'wpaqs' ); ?></strong>
 					<?php esc_html_e( 'Addresses are shown so you can recognise them. This screen makes no network requests, so it holds no opinion about any of them.', 'wpaqs' ); ?>
+				</li>
+				<li>
+					<strong><?php esc_html_e( 'Whether the addresses above are the visitor\'s.', 'wpaqs' ); ?></strong>
+					<?php if ( $proxied ) : ?>
+						<?php esc_html_e( 'On this site they are not. Every address recorded here is loopback or one single private address, so the reverse proxy in front of WordPress is not passing the client address through — and the three rules that compare addresses are comparing one address with itself. Read "no finding" from those as "not checked", and see the finding above.', 'wpaqs' ); ?>
+					<?php else : ?>
+						<?php esc_html_e( 'WordPress records whatever address the connection appears to come from. Behind a reverse proxy that does not pass the client address through, that is the proxy — and the three rules that compare addresses stop working without saying so. This site is recording addresses that vary, so they are being passed through.', 'wpaqs' ); ?>
+					<?php endif; ?>
+				</li>
+				<li>
+					<strong><?php esc_html_e( 'Whether the account list is complete.', 'wpaqs' ); ?></strong>
+					<?php if ( $network ) : ?>
+						<?php esc_html_e( 'Not on a network. The count of accounts is compared against the users table directly, which is what catches an account hidden from every list WordPress draws — and on multisite that table is shared by every site while this list is one site\'s, so the comparison would report the whole network. It is switched off here.', 'wpaqs' ); ?>
+					<?php else : ?>
+						<?php esc_html_e( 'The count of accounts is compared against the users table directly, because a plugin can remove an account from every list WordPress draws while the count still includes it. That comparison runs on this site, and an account missing from the list is reported above.', 'wpaqs' ); ?>
+					<?php endif; ?>
 				</li>
 				<li>
 					<strong><?php esc_html_e( 'Files, WordPress core, and hardening settings.', 'wpaqs' ); ?></strong>
