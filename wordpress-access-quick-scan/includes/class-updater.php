@@ -158,7 +158,19 @@ class WPAQS_Updater {
 	 *   an answer rather than a fault.
 	 * - A version-control checkout at the plugin directory or the install root, which
 	 *   WordPress refuses to update over.
-	 * - The scheduled event that performs the update.
+	 *
+	 * **`wp_maybe_auto_update` is deliberately not one of them, and that is a correction.**
+	 * A sixth gate reported the scheduled event being absent, reasoning that nothing would
+	 * attempt the update without it. True as a sentence and false as a test: it reads the cron
+	 * array from inside another cron event, and WordPress reschedules that event on `init`, so
+	 * the moment this looks is not representative. The first site to report it had updated
+	 * itself to the newest release that same night through WordPress's own path, which cannot
+	 * happen unless the event ran — and it fired on every install that could report it.
+	 *
+	 * Worse than noise. `apply_requested()` refuses on any blocker, so a false one here would
+	 * have had the console's update button decline across the whole fleet and blame each
+	 * site's own configuration for it. Everything left reads a constant or a filter: facts
+	 * that say the same thing whenever they are asked.
 	 *
 	 * **Deliberately not a verdict on whether an update would succeed.** Filesystem
 	 * credentials, disk space and a package that fails to unzip are all real ways for this to
@@ -192,10 +204,6 @@ class WPAQS_Updater {
 
 		if ( self::under_version_control() ) {
 			$found[] = 'version_control_checkout';
-		}
-
-		if ( function_exists( 'wp_next_scheduled' ) && ! wp_next_scheduled( 'wp_maybe_auto_update' ) ) {
-			$found[] = 'update_event_not_scheduled';
 		}
 
 		return $found;

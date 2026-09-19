@@ -3,6 +3,23 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.18.0
+
+**A blocker fired on a site that had just updated itself.** The sibling half of the same
+correction, and the gate was identical here.
+
+0.15.0 added `auto_update_blocked`, and one of its six gates reported `wp_maybe_auto_update`
+being absent from the cron array. It reads that array from inside another cron event, and
+WordPress reschedules the event on `init`, so the moment it looks is not representative. On
+the first fleet to report it, the gate fired on every install that could — including one that
+had updated itself to the newest release that night through WordPress's own path, which
+cannot happen unless the event ran.
+
+`apply_requested()` refuses on any blocker, so a false one would have had the console's update
+button decline across the fleet and blame each site for it.
+
+Gone, with an assertion holding it gone. The five that remain read a constant or a filter.
+
 ## 0.17.0
 
 **The console can ask for a fresh report, per site or across the fleet.** The sibling half of
