@@ -340,6 +340,47 @@ class WPAQS_Accounts {
 			);
 		}
 
+		/*
+		 * And say when that list is a limit rather than a total.
+		 *
+		 * `missing()` reads at most MAX_MISSING rows, deliberately — a site with thousands of
+		 * hidden accounts must not be able to make this plugin print them all. But it ended
+		 * there in silence, so twenty findings of the loudest severity this plugin has read as
+		 * twenty hidden accounts when twenty is the constant. A reader counting rules across a
+		 * fleet is then comparing one site's measurement against another's cap.
+		 *
+		 * The arithmetic is already in every row's evidence — `counted` minus `listed` is how
+		 * many the list is short — but nobody reads a per-row field to find out whether the
+		 * rows ran out. It is said once, plainly, and only when it is true.
+		 *
+		 * No extra query: both numbers are already here, and the notice fires only where the
+		 * rows above already did.
+		 */
+		$counted = isset( $accounts['total'] ) ? (int) $accounts['total'] : 0;
+		$listed  = isset( $accounts['rows'] ) ? count( (array) $accounts['rows'] ) : 0;
+		$short   = $counted - $listed;
+
+		if ( ! empty( $missing ) && $short > count( $missing ) ) {
+			$findings[] = WPAQS_Findings::make(
+				'hidden_accounts_capped',
+				'accounts:hidden',
+				sprintf(
+					'reported=%1$d short=%2$d counted=%3$d listed=%4$d limit=%5$d',
+					count( $missing ),
+					$short,
+					$counted,
+					$listed,
+					(int) self::MAX_MISSING
+				),
+				sprintf(
+					/* translators: 1: findings reported, 2: how many the list is short by. */
+					__( 'The %1$d accounts named above are the first this read returned, and the two counts differ by %2$d. The rest were not read.', 'wpaqs' ),
+					count( $missing ),
+					$short
+				)
+			);
+		}
+
 		foreach ( self::duplicate_emails( $accounts ) as $email => $logins ) {
 			$findings[] = WPAQS_Findings::make(
 				'duplicate_account_email',

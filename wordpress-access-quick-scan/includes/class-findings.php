@@ -33,6 +33,12 @@ class WPAQS_Findings {
 				'detail'         => __( 'WordPress counts the accounts on this site with one query and lists them with another. The two disagree, the list was not capped, and reading the users table directly names an account the list left out. Nothing ordinary produces that: code hooked to pre_user_query removes an account from every list WordPress draws — the Users screen, the author dropdown, the REST route, this plugin\'s own list — while count_users() goes on counting it.', 'wpaqs' ),
 				'recommendation' => __( 'Do not start by deleting the account. It is hidden by code that is still running, and code that recreates an administrator on every request recreates this one. Find what is filtering the user query first: WordPress Malware Quick Scan reads the files and the database for exactly that, and a hidden account is the strongest reason there is to run it. Once the filter is gone the account appears in the list above, with its role, its sessions and its application passwords.', 'wpaqs' ),
 			),
+			'hidden_accounts_capped'           => array(
+				'severity'       => 'info',
+				'title'          => __( 'More accounts are hidden than were read', 'wpaqs' ),
+				'detail'         => __( 'The cross-check against the users table reads a bounded number of rows, so that a site with thousands of hidden accounts cannot make this plugin print them all. It reached that bound. The accounts named above are real and are the first the read returned; the count of them is a floor, and the evidence here says how far short the list is.', 'wpaqs' ),
+				'recommendation' => __( 'Read this as the scale of the problem rather than as another account to look at. Deal with what is hiding them — the findings above name the accounts to start from, and the filter doing the hiding is one thing however many it covers — then run the scan again to see what is left.', 'wpaqs' ),
+			),
 			'capability_outside_role'           => array(
 				'severity'       => 'high',
 				'title'          => __( 'Account holds capabilities that come from no role', 'wpaqs' ),
