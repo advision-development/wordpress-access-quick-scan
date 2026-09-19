@@ -67,6 +67,12 @@ class WPAQS_Report {
 
 		$findings = array_merge( $findings, WPAQS_Sessions::client_ip_findings( $addresses ) );
 
+		// Whether this reader can keep itself current. An old copy answers the account
+		// questions it was taught and stays silent about the rest, which reads exactly like a
+		// site with nothing wrong — so a scanner that cannot update is a fact about what this
+		// report is worth, not a footnote about the plugin.
+		$findings = array_merge( $findings, WPAQS_Updater::findings() );
+
 		return array(
 			// There is no scan, so these bracket the read rather than a run. The console
 			// wants to know when the answer was true, and that is what they say.

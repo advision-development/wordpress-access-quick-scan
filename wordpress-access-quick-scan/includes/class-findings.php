@@ -33,6 +33,12 @@ class WPAQS_Findings {
 				'detail'         => __( 'WordPress counts the accounts on this site with one query and lists them with another. The two disagree, the list was not capped, and reading the users table directly names an account the list left out. Nothing ordinary produces that: code hooked to pre_user_query removes an account from every list WordPress draws — the Users screen, the author dropdown, the REST route, this plugin\'s own list — while count_users() goes on counting it.', 'wpaqs' ),
 				'recommendation' => __( 'Do not start by deleting the account. It is hidden by code that is still running, and code that recreates an administrator on every request recreates this one. Find what is filtering the user query first: WordPress Malware Quick Scan reads the files and the database for exactly that, and a hidden account is the strongest reason there is to run it. Once the filter is gone the account appears in the list above, with its role, its sessions and its application passwords.', 'wpaqs' ),
 			),
+			'auto_update_blocked'              => array(
+				'severity'       => 'info',
+				'title'          => __( 'This site will not update this plugin on its own', 'wpaqs' ),
+				'detail'         => __( 'Something on this site stops WordPress applying unattended updates, so this reader stays on whatever version is installed however many releases are published. Nothing here is compromised by it — but the account rules an old copy knows are the rules it shipped with, and it answers those and stays silent about the rest, which reads exactly like a site with nothing wrong. The evidence names what is in the way.', 'wpaqs' ),
+				'recommendation' => __( 'Read which reason applies. A constant in wp-config.php or a managed host\'s policy is a decision somebody made and may still want; a missing scheduled event or a stray version-control directory usually is not. One of them is worth a second look either way: DISALLOW_FILE_MODS is what this plugin recommends for the file editors, so a site can take that advice and stop updating the scanner that gave it. Until it changes, this plugin needs updating by hand.', 'wpaqs' ),
+			),
 			'hidden_accounts_capped'           => array(
 				'severity'       => 'info',
 				'title'          => __( 'More accounts are hidden than were read', 'wpaqs' ),

@@ -88,6 +88,23 @@ function add_action( $hook, $callback, $priority = 10, $args = 1 ) {
 	$GLOBALS['hooks'][] = $hook;
 }
 
+/**
+ * The scheduled event that performs unattended updates.
+ *
+ * Controllable because its absence is one of the things blockers() reports, and a stub that
+ * always answered would make that assertion pass with the check deleted.
+ *
+ * @param string $hook Event name.
+ * @return int|false
+ */
+function wp_next_scheduled( $hook ) {
+	$planted = isset( $GLOBALS['scheduled'] ) ? $GLOBALS['scheduled'] : array();
+
+	return array_key_exists( $hook, $planted ) ? $planted[ $hook ] : false;
+}
+
+$GLOBALS['scheduled']       = array( 'wp_maybe_auto_update' => 2000000000 );
+$GLOBALS['filter_values']   = array();
 $GLOBALS['site_transients'] = array();
 $GLOBALS['hooks']           = array();
 
@@ -615,5 +632,93 @@ $GLOBALS['site_transients'] = array( 'wpaqs_release' => array( 'failed' => true,
 
 check( 'a normal read honours the cached failure', array() === WPAQS_Updater::release() );
 check( 'and a forced one goes past it', '9.9.9' === WPAQS_Updater::release( true )['version'] );
+
+// ------------------------------------------------- what stops this site taking an update
+//
+// automatically() answers WordPress's filter with true and that is the last word on nothing.
+// It matters here for a reason of this plugin's own: the account rules an old copy knows are
+// the rules it shipped with, so it answers those and stays silent about the rest — which
+// reads exactly like a site with nothing wrong.
+
+load_class( 'findings' );
+
+check( 'a site with nothing in the way reports nothing', array() === WPAQS_Updater::blockers(), implode( ',', WPAQS_Updater::blockers() ) );
+
+$GLOBALS['filter_values']['automatic_updater_disabled'] = true;
+check( "WordPress's own kill switch is read", in_array( 'automatic_updater_disabled_filter', WPAQS_Updater::blockers(), true ) );
+$GLOBALS['filter_values'] = array();
+
+$GLOBALS['filter_values']['wpaqs_auto_update'] = false;
+check( "and so is this plugin's own", in_array( 'wpaqs_auto_update_filter', WPAQS_Updater::blockers(), true ) );
+$GLOBALS['filter_values'] = array();
+
+/*
+ * The sibling's filter is not this plugin's. Reading the wrong name would make one plugin
+ * report the other's escape hatch, and both are installed on every site in the fleet.
+ */
+$GLOBALS['filter_values']['wpmqs_auto_update'] = false;
+check( "and the sibling's is not mistaken for it", array() === WPAQS_Updater::blockers(), implode( ',', WPAQS_Updater::blockers() ) );
+$GLOBALS['filter_values'] = array();
+
+$GLOBALS['scheduled'] = array();
+check(
+	'an install whose update event is gone will not be trying',
+	in_array( 'update_event_not_scheduled', WPAQS_Updater::blockers(), true ),
+	'whatever else is true, nothing will attempt the update'
+);
+$GLOBALS['scheduled'] = array( 'wp_maybe_auto_update' => 2000000000 );
+
+check( 'and it is quiet again once the event is back', array() === WPAQS_Updater::blockers() );
+
+// More than one reason is more than one reason: reporting only the first would have somebody
+// clear a constant and find the site still stuck.
+$GLOBALS['filter_values']['automatic_updater_disabled'] = true;
+$GLOBALS['scheduled']                                   = array();
+
+check( 'every reason is named, not just the first', 2 === count( WPAQS_Updater::blockers() ), implode( ',', WPAQS_Updater::blockers() ) );
+
+$GLOBALS['filter_values'] = array();
+$GLOBALS['scheduled']     = array( 'wp_maybe_auto_update' => 2000000000 );
+
+// ---- and what reaches the report
+
+check( 'a site that can update itself produces no finding', array() === WPAQS_Updater::findings(), 'silence is the healthy state and must stay cheap' );
+
+$GLOBALS['filter_values']['automatic_updater_disabled'] = true;
+
+$rows = WPAQS_Updater::findings();
+
+check( 'a site that cannot produces exactly one', 1 === count( $rows ), (string) count( $rows ) );
+check(
+	'informational, so measuring how far this reaches cannot lapse a review',
+	1 === count( $rows ) && 'info' === $rows[0]['severity'],
+	1 === count( $rows ) ? $rows[0]['severity'] : '-'
+);
+check(
+	'and the evidence names what is in the way',
+	1 === count( $rows ) && false !== strpos( $rows[0]['evidence'], 'automatic_updater_disabled_filter' ),
+	1 === count( $rows ) ? $rows[0]['evidence'] : '-'
+);
+check(
+	'against a target naming this plugin rather than the sibling',
+	1 === count( $rows ) && false !== strpos( $rows[0]['target'], 'wordpress-access-quick-scan:auto-update' ),
+	1 === count( $rows ) ? $rows[0]['target'] : '-'
+);
+
+$GLOBALS['filter_values'] = array();
+
+// Constants last: they cannot be undefined again, so every assertion above has to have run
+// while they were absent.
+define( 'DISALLOW_FILE_MODS', true );
+
+check(
+	'the constant this plugin recommends for the file editors is read',
+	in_array( 'DISALLOW_FILE_MODS', WPAQS_Updater::blockers(), true ),
+	'a site can take that advice and stop updating the scanner that gave it'
+);
+
+define( 'AUTOMATIC_UPDATER_DISABLED', true );
+
+check( 'and so is the one managed hosts set', in_array( 'AUTOMATIC_UPDATER_DISABLED', WPAQS_Updater::blockers(), true ) );
 
 finish();
