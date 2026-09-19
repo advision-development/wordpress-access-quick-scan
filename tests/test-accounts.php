@@ -530,6 +530,23 @@ function hidden() {
 	return $found;
 }
 
+/**
+ * The notice that says the list above is a limit.
+ *
+ * @return array
+ */
+function capped_notice() {
+	$found = array();
+
+	foreach ( WPAQS_Accounts::findings( WPAQS_Accounts::all() ) as $finding ) {
+		if ( 'hidden_accounts_capped' === $finding['rule'] ) {
+			$found[] = $finding;
+		}
+	}
+
+	return $found;
+}
+
 $GLOBALS['wpdb'] = new Stub_WPDB();
 
 // The table holds every listed account and one more. The listing does not, and the count
@@ -575,6 +592,88 @@ $GLOBALS['counted']       = count( $GLOBALS['users'] ) + 2;
 check( 'two hidden accounts are two findings', 2 === count( hidden() ), (string) count( hidden() ) );
 
 array_pop( $GLOBALS['wpdb']->table );
+
+/*
+ * ---- and the count of those findings is a floor, which it used to leave unsaid
+ *
+ * missing() reads at most MAX_MISSING rows on purpose. Ending there in silence meant twenty
+ * findings of the loudest severity here read as twenty hidden accounts, when twenty is the
+ * constant — the same shape that had a fleet review comparing one site's measurement against
+ * another's cap.
+ */
+$GLOBALS['wpdb']->table = array();
+
+for ( $i = 0; $i < WPAQS_Accounts::MAX_MISSING + 5; $i++ ) {
+	$GLOBALS['wpdb']->table[] = table_row( 5000 + $i, 'ghost' . $i );
+}
+
+// The site counts far more than it lists, and far more than the read will return.
+$GLOBALS['counted'] = count( $GLOBALS['users'] ) + WPAQS_Accounts::MAX_MISSING + 5;
+
+$rows   = hidden();
+$notice = capped_notice();
+
+check(
+	'the read still stops at its bound',
+	WPAQS_Accounts::MAX_MISSING === count( $rows ),
+	count( $rows ) . ' reported'
+);
+
+check( 'and now says the count is a floor', 1 === count( $notice ), count( $notice ) . ' notices' );
+
+check(
+	'naming how many were read and how far short the list is',
+	1 === count( $notice )
+		&& false !== strpos( $notice[0]['evidence'], 'reported=' . WPAQS_Accounts::MAX_MISSING )
+		&& false !== strpos( $notice[0]['evidence'], 'short=' . ( WPAQS_Accounts::MAX_MISSING + 5 ) ),
+	1 === count( $notice ) ? $notice[0]['evidence'] : 'no notice'
+);
+
+check(
+	'informational, so a floor cannot end a review on its own',
+	1 === count( $notice ) && 'info' === $notice[0]['severity'],
+	1 === count( $notice ) ? $notice[0]['severity'] : '-'
+);
+
+check(
+	'once, not once per account it could not read',
+	1 === count( $notice ),
+	'it is a fact about the read, not about an account'
+);
+
+/*
+ * And silent whenever the list is whole. Three hidden accounts read as three is a total, and
+ * a notice there would tell somebody to go looking for accounts that do not exist.
+ */
+$GLOBALS['wpdb']->table = array();
+
+for ( $i = 0; $i < 3; $i++ ) {
+	$GLOBALS['wpdb']->table[] = table_row( 6000 + $i, 'ghost' . $i );
+}
+
+$GLOBALS['counted'] = count( $GLOBALS['users'] ) + 3;
+
+check( 'three hidden accounts are three findings', 3 === count( hidden() ), (string) count( hidden() ) );
+check( 'and raise no notice, because that three is a total', array() === capped_notice() );
+
+// Exactly at the bound with nothing beyond it is also a total, and the off-by-one that would
+// call it capped is the one worth pinning.
+$GLOBALS['wpdb']->table = array();
+
+for ( $i = 0; $i < WPAQS_Accounts::MAX_MISSING; $i++ ) {
+	$GLOBALS['wpdb']->table[] = table_row( 7000 + $i, 'ghost' . $i );
+}
+
+$GLOBALS['counted'] = count( $GLOBALS['users'] ) + WPAQS_Accounts::MAX_MISSING;
+
+check(
+	'a list that exactly fills the bound is not capped',
+	WPAQS_Accounts::MAX_MISSING === count( hidden() ) && array() === capped_notice(),
+	'the bound was reached and nothing was left behind, which are different facts'
+);
+
+$GLOBALS['wpdb']->table = array();
+$GLOBALS['wpdb']->table[] = table_row( 4242, 'christian.walley' );
 
 // ---- the benign cases, and there are four that matter
 

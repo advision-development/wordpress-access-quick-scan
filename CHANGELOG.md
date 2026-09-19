@@ -3,6 +3,38 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.14.0
+
+**Twenty hidden accounts might have been two thousand, and nothing said so.**
+`hidden_account_discrepancy` is this plugin's loudest severity and it is reported one row
+per account, from a cross-check against the users table that reads at most `MAX_MISSING`
+rows — deliberately, so a site with thousands of hidden accounts cannot make this plugin
+print them all. It reached that bound in silence.
+
+So twenty of them read as twenty. A fleet review counting rules across sites was then
+comparing one site's measurement against another's constant, which is the same mistake that
+five sites of a 165-site fleet produced this week in the sibling plugin, where twenty-five
+`spam_slug_content` findings were read as twenty-five injected posts and twenty-five was
+`MAX_SLUGS`.
+
+The arithmetic was already in every row — `counted` minus `listed` is how far short the list
+is — but nobody reads a per-row evidence field to find out whether the rows ran out. A new
+`hidden_accounts_capped` finding says it once, carries both numbers, and fires only when the
+read actually left something behind: a list that exactly fills the bound with nothing beyond
+it is a total, not a cap, and stays silent. Informational, because it is a fact about the
+read rather than another account to look at, and because a floor must not be able to end a
+review on its own.
+
+No extra query and no detection change: the same accounts are reported, the count is
+unchanged, and the notice is built from two numbers already in hand.
+
+**What was checked and left alone.** This plugin has no finding cap — findings are merged
+from each source and sorted, and nothing is dropped — so it has no equivalent of the sibling's
+`findings_truncated`, and the console reading `access.findingsTruncated` correctly gets
+silence. Its other three bounded lists already say when they are bounded: `accounts.capped`,
+`timeline.capped`, and the `truncated` flag the export sends the console. `MAX_MISSING` was
+the only one that stopped without saying so.
+
 ## 0.13.0
 
 **Four rules, from one site where this plugin found one thing.** It was installed on a
