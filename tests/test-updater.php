@@ -660,25 +660,40 @@ $GLOBALS['filter_values']['wpmqs_auto_update'] = false;
 check( "and the sibling's is not mistaken for it", array() === WPAQS_Updater::blockers(), implode( ',', WPAQS_Updater::blockers() ) );
 $GLOBALS['filter_values'] = array();
 
+/*
+ * The inverse guarantee, and it is here because the gate it replaces was wrong.
+ *
+ * A sixth blocker reported `wp_maybe_auto_update` being absent from the cron array. The
+ * reasoning read well — nothing attempts the update without it — and the test read well too,
+ * which is the problem: both described the sentence rather than the site. It reads the cron
+ * array from inside another cron event, and WordPress reschedules that event on `init`, so
+ * the moment it looks is not representative.
+ *
+ * The first install to report it had updated itself to the newest release that same night,
+ * through WordPress's own path, which cannot happen unless the event ran. It fired on every
+ * install that could report it. And `apply_requested()` refuses on any blocker, so it would
+ * have had the console's update button decline across the fleet and blame each site for it.
+ *
+ * This asserts it stays gone. Everything left in blockers() reads a constant or a filter.
+ */
 $GLOBALS['scheduled'] = array();
 check(
-	'an install whose update event is gone will not be trying',
-	in_array( 'update_event_not_scheduled', WPAQS_Updater::blockers(), true ),
-	'whatever else is true, nothing will attempt the update'
+	'an absent update event is not a blocker',
+	array() === WPAQS_Updater::blockers(),
+	'it fired on an install that had just updated itself, and it refused the update button'
 );
 $GLOBALS['scheduled'] = array( 'wp_maybe_auto_update' => 2000000000 );
 
-check( 'and it is quiet again once the event is back', array() === WPAQS_Updater::blockers() );
+check( 'and neither is a present one', array() === WPAQS_Updater::blockers() );
 
 // More than one reason is more than one reason: reporting only the first would have somebody
 // clear a constant and find the site still stuck.
 $GLOBALS['filter_values']['automatic_updater_disabled'] = true;
-$GLOBALS['scheduled']                                   = array();
+$GLOBALS['filter_values']['wpaqs_auto_update']            = false;
 
 check( 'every reason is named, not just the first', 2 === count( WPAQS_Updater::blockers() ), implode( ',', WPAQS_Updater::blockers() ) );
 
 $GLOBALS['filter_values'] = array();
-$GLOBALS['scheduled']     = array( 'wp_maybe_auto_update' => 2000000000 );
 
 // ---- and what reaches the report
 

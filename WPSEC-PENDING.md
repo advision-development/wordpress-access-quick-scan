@@ -177,10 +177,12 @@ Two things settled on the console side that this repo has to match when it lands
 
 ### `auto_update_blocked` ships informational, and is owed a second decision
 
-0.15.0 reports why a site will not take an unattended update, at `info`, because nobody knew
-how much of a fleet it fires on and a rule that lapses every review on the day it ships is
-one people switch off before reading it. Once a fleet has reported against it, read the
-number and decide.
+0.15.0 reports why a site will not take an unattended update, at `info`, so the number could
+be read before the severity was chosen. The first day of data did not answer that question;
+it found a broken gate instead, removed in 0.18.0, which had fired on every install that
+could report it. **The measurement has not happened** — every reading so far was of a rule
+that was wrong, so do not raise the severity on the strength of them. Read it again once a
+fleet has reported against the corrected rule.
 
 The comparison worth making is against this plugin's own `file_editing_enabled`, which is
 `medium` for a smaller consequence — and which recommends the very constant, `DISALLOW_FILE_MODS`,
