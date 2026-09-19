@@ -268,6 +268,82 @@ class WPAQS_Updater {
 	}
 
 	/**
+	 * Bring this plugin up to a version the console has asked for.
+	 *
+	 * The console says which version it has seen published. This decides whether that is
+	 * newer than what is installed and, if so, runs the same upgrade WordPress would have run
+	 * on its own schedule — from `offer()`, which is pinned, so the package still comes from
+	 * the one repository this plugin will accept and from nowhere else.
+	 *
+	 * **It refuses on every blocker `blockers()` reports, and that is deliberate.** A site
+	 * that sets `AUTOMATIC_UPDATER_DISABLED` or `DISALLOW_FILE_MODS` has said it does not take
+	 * unattended updates, and a remote button that overrode it would turn a hardening
+	 * constant into a decoration — which is precisely the class of fault this plugin exists to
+	 * report. The press is attended at the console and unattended here; those are not the
+	 * same thing, and the constant means the second. The site stays behind, `auto_update_blocked`
+	 * says why, and somebody can make that call with the reason in front of them.
+	 *
+	 * Returns a word rather than a boolean because four outcomes are worth telling apart when
+	 * this is read back out of a log: nothing was asked, it was already current, something
+	 * stood in the way, or it ran.
+	 *
+	 * @param string $version The version the console asked for.
+	 * @return string One of `idle`, `current`, `blocked`, `updated`, `failed`.
+	 */
+	public static function apply_requested( $version ) {
+		if ( ! is_string( $version ) || '' === $version ) {
+			return 'idle';
+		}
+
+		// Upwards only, through the one comparison this file already owns — a second
+		// version_compare here is the padding lesson learned twice and applied once.
+		if ( ! self::is_newer( $version, WPAQS_VERSION ) ) {
+			return 'current';
+		}
+
+		if ( ! empty( self::blockers() ) ) {
+			return 'blocked';
+		}
+
+		/*
+		 * Loaded defensively, because this runs hourly on every site in the fleet and a bare
+		 * `require_once` on a path that is not there is a fatal error rather than a failed
+		 * update. WordPress ships both of these, so their absence means something is already
+		 * wrong with the install — and the honest response to that is to decline the update,
+		 * not to take the request down with it.
+		 */
+		foreach ( array( 'update.php', 'class-wp-upgrader.php' ) as $file ) {
+			$path = ABSPATH . 'wp-admin/includes/' . $file;
+
+			if ( is_readable( $path ) ) {
+				require_once $path;
+			}
+		}
+
+		if ( ! class_exists( 'Plugin_Upgrader' ) || ! class_exists( 'Automatic_Upgrader_Skin' ) ) {
+			return 'failed';
+		}
+
+		// Ask GitHub again rather than trusting the cache: the console has just said a newer
+		// release exists, and a cached "no update" from before it was published is exactly
+		// the state this button is for.
+		self::release( true );
+		delete_site_transient( 'update_plugins' );
+
+		if ( function_exists( 'wp_update_plugins' ) ) {
+			wp_update_plugins();
+		}
+
+		$upgrader = new Plugin_Upgrader( new Automatic_Upgrader_Skin() );
+		$result   = $upgrader->upgrade( self::basename() );
+
+		// This plugin and nothing else. WordPress's own unattended pass updates everything
+		// due at once, and a button that quietly upgraded every plugin on 165 sites would be
+		// a far larger thing than the one somebody pressed.
+		return ( true === $result ) ? 'updated' : 'failed';
+	}
+
+	/**
 	 * Say why the auto-update toggle is not there.
 	 *
 	 * @param string $html   The markup WordPress was going to print.

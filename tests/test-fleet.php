@@ -460,5 +460,75 @@ $GLOBALS['reply'] = array( 'wp_error' => true );
 WPAQS_Fleet::poll();
 check( 'a console that cannot be reached leaves it standing too', ! empty( WPAQS_Fleet::state()['requested_at'] ) );
 
+// --------------------------------------- asking the console whether to update
+//
+// The console never calls a site. Every enrolled site already runs an hourly fleet check and
+// this is one more question asked on it — so there is no inbound endpoint to secure on 165
+// WordPress installs, and a site whose cron has stopped simply does not ask.
+
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'the-key' );
+
+$GLOBALS['posts'] = array();
+$GLOBALS['reply'] = array( 'code' => 200, 'body' => array( 'updateTo' => '0.42.0' ) );
+
+$want = WPAQS_Fleet::wanted_version();
+$post = end( $GLOBALS['posts'] );
+
+check( 'an enrolled site asks the console', false !== strpos( $post['url'], '/ask' ) );
+check( 'with its key, in a header', isset( $post['args']['headers']['Authorization'] ) );
+check( 'and is told a version', '0.42.0' === $want, $want );
+
+/*
+ * The property the whole design rests on. This plugin pins its downloads to one host, owner
+ * and repository; a console able to name a location would be arbitrary code on every site in
+ * the fleet the moment it was compromised. So a location in the reply is not read, not
+ * followed, and not repeated — it is simply not a version.
+ */
+foreach ( array(
+	'https://evil.example/x.zip',
+	'../../../etc/passwd',
+	'0.42.0 && curl evil',
+	'latest',
+	'0.42',
+	'v0.42.0',
+	'99999999.0.0',
+	'',
+) as $hostile ) {
+	$GLOBALS['reply'] = array( 'code' => 200, 'body' => array( 'updateTo' => $hostile ) );
+
+	check(
+		sprintf( 'refuses %-28s', substr( $hostile, 0, 26 ) ),
+		'' === WPAQS_Fleet::wanted_version(),
+		'anything that is not three numbers is not an instruction'
+	);
+}
+
+// A reply carrying a package alongside a version must not smuggle one in.
+$GLOBALS['reply'] = array(
+	'code' => 200,
+	'body' => array( 'updateTo' => '0.42.0', 'package' => 'https://evil.example/x.zip' ),
+);
+
+check( 'and reads nothing but the version out of a reply that offers more', '0.42.0' === WPAQS_Fleet::wanted_version() );
+
+/*
+ * Nothing here may turn the console being unreachable into an action. A refusal, an outage
+ * and a malformed reply all answer the same as before this existed.
+ */
+$GLOBALS['reply'] = array( 'wp_error' => true );
+check( 'a console that cannot be reached asks for nothing', '' === WPAQS_Fleet::wanted_version() );
+
+$GLOBALS['reply'] = array( 'code' => 401, 'body' => array( 'error' => 'unauthenticated' ) );
+check( 'and neither does one that refuses', '' === WPAQS_Fleet::wanted_version() );
+
+$GLOBALS['reply'] = array( 'code' => 200, 'body' => array() );
+check( 'an empty answer is no instruction', '' === WPAQS_Fleet::wanted_version() );
+
+$GLOBALS['options']['wpaqs_fleet'] = array();
+$GLOBALS['posts']                  = array();
+
+check( 'a site that is not enrolled does not ask at all', '' === WPAQS_Fleet::wanted_version() );
+check( 'and sends nothing', array() === $GLOBALS['posts'] );
+
 printf( "\n%d failure(s)\n", $failures );
 exit( $failures > 0 ? 1 : 0 );
