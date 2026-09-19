@@ -3,6 +3,44 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.15.0
+
+**A site can refuse every unattended update and nothing said so.** `automatically()` answers
+WordPress's `auto_update_plugin` filter with `true`, and that is the last word on nothing —
+WordPress asks several other questions first and this plugin knew none of the answers.
+
+It matters here for a reason of this plugin's own. This one reports who can get into a site,
+and the rules an old copy knows are the rules it shipped with: it answers the account
+questions it was taught and stays silent about the rest, which reads exactly like a site with
+nothing wrong.
+
+Measured on a 165-site fleet, where eighteen sites sat between one and three releases behind
+on the sibling scanner while reporting on time every day. Cron plainly alive; the console
+able to say they were behind and not one word about why.
+
+`auto_update_blocked` names what is in the way, all of it rather than the first thing:
+`AUTOMATIC_UPDATER_DISABLED`, `DISALLOW_FILE_MODS`, the `automatic_updater_disabled` filter,
+this plugin's own `wpaqs_auto_update` filter, a version-control checkout at the plugin
+directory or the install root, and `wp_maybe_auto_update` being absent. Each is a real
+refusal in `WP_Automatic_Updater` rather than a guess at one, and each is a local read.
+
+One of them deserves saying twice: **`DISALLOW_FILE_MODS` is what this plugin's own
+`file_editing_enabled` recommendation points people at.** A site can take that advice and
+harden itself into never updating the scanner that gave it, and nobody would connect the two.
+
+**Deliberately not a verdict on whether an update would succeed.** Filesystem credentials,
+disk space and a package that fails to unzip are real ways for this to fail and none can be
+established without attempting it. This answers whether the site will even try.
+
+**Informational, and that is a measurement rather than a judgement.** Nobody yet knows how
+much of a fleet this fires on, and a rule that lapses every review on the day it ships is one
+people switch off before reading it. The severity gets decided against the number.
+`WPSEC-PENDING.md` carries that.
+
+Shipped alongside the identical rule in the sibling, and the two read their own filter names
+— both plugins are installed on every site in that fleet, so one reporting the other's escape
+hatch would be a finding against the wrong scanner.
+
 ## 0.14.0
 
 **Twenty hidden accounts might have been two thousand, and nothing said so.**

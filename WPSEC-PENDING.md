@@ -175,6 +175,23 @@ Two things settled on the console side that this repo has to match when it lands
 
 ## 3. Smaller, and not blocking
 
+### `auto_update_blocked` ships informational, and is owed a second decision
+
+0.15.0 reports why a site will not take an unattended update, at `info`, because nobody knew
+how much of a fleet it fires on and a rule that lapses every review on the day it ships is
+one people switch off before reading it. Once a fleet has reported against it, read the
+number and decide.
+
+The comparison worth making is against this plugin's own `file_editing_enabled`, which is
+`medium` for a smaller consequence — and which recommends the very constant, `DISALLOW_FILE_MODS`,
+that is one of the reasons this new rule fires. A site that took that advice and thereby
+stopped updating its access scanner is a real outcome, and `info` does not ask anybody
+anything about it.
+
+The sibling carries the identical decision in its own `WPSEC-PENDING.md`; whichever is
+resolved first should settle both, because a fleet seeing one at `info` and the other at
+`medium` for the same site condition is a console disagreeing with itself.
+
 ### Four session assertions do not test what they say they test
 
 `sessions_from()` in `tests/test-sessions.php` read `$live_until` without receiving it — a

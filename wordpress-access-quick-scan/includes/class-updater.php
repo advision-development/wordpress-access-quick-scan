@@ -132,6 +132,142 @@ class WPAQS_Updater {
 	}
 
 	/**
+	 * Why this plugin cannot update itself on this site, as reason codes.
+	 *
+	 * `automatically()` above answers WordPress's filter with `true`, and that answer is the
+	 * last word on nothing: WordPress asks several other questions first, and a site can
+	 * refuse every unattended update without anything here knowing. Measured on a 165-site
+	 * fleet, eighteen sites sat between one and three releases behind on the sibling scanner
+	 * while reporting on time every day — cron plainly alive, and the console able to say
+	 * they were behind and not one word about why.
+	 *
+	 * It matters here for a reason of this plugin's own. This one reports who can get into a
+	 * site, and the rules it knows are the rules it shipped with: an old copy answers the
+	 * account questions it was taught and stays silent about the rest, which reads exactly
+	 * like a site with nothing wrong.
+	 *
+	 * Only gates that can be read locally and answered certainly, each a real refusal in
+	 * `WP_Automatic_Updater` rather than a guess at one:
+	 *
+	 * - `AUTOMATIC_UPDATER_DISABLED` and the `automatic_updater_disabled` filter turn every
+	 *   unattended update off. Managed hosts set the constant.
+	 * - `DISALLOW_FILE_MODS` blocks installs and updates outright — and it is the constant
+	 *   this plugin's own `file_editing_enabled` recommendation points people at, so a site
+	 *   can take that advice and harden itself into never updating the scanner that gave it.
+	 * - This plugin's own `wpaqs_auto_update` filter, because the escape hatch being used is
+	 *   an answer rather than a fault.
+	 * - A version-control checkout at the plugin directory or the install root, which
+	 *   WordPress refuses to update over.
+	 * - The scheduled event that performs the update.
+	 *
+	 * **Deliberately not a verdict on whether an update would succeed.** Filesystem
+	 * credentials, disk space and a package that fails to unzip are all real ways for this to
+	 * fail and none can be established without attempting it. This answers the narrower
+	 * question it can answer honestly: whether the site will even try.
+	 *
+	 * @return array Reason codes, empty when nothing here stands in the way.
+	 */
+	public static function blockers() {
+		$found = array();
+
+		if ( defined( 'AUTOMATIC_UPDATER_DISABLED' ) && AUTOMATIC_UPDATER_DISABLED ) {
+			$found[] = 'AUTOMATIC_UPDATER_DISABLED';
+		}
+
+		if ( defined( 'DISALLOW_FILE_MODS' ) && DISALLOW_FILE_MODS ) {
+			$found[] = 'DISALLOW_FILE_MODS';
+		}
+
+		if ( function_exists( 'apply_filters' ) ) {
+			if ( apply_filters( 'automatic_updater_disabled', false ) ) {
+				$found[] = 'automatic_updater_disabled_filter';
+			}
+
+			// Read rather than re-running automatically(): the question is what the site
+			// answered, and the site answers through this filter.
+			if ( ! apply_filters( 'wpaqs_auto_update', true ) ) {
+				$found[] = 'wpaqs_auto_update_filter';
+			}
+		}
+
+		if ( self::under_version_control() ) {
+			$found[] = 'version_control_checkout';
+		}
+
+		if ( function_exists( 'wp_next_scheduled' ) && ! wp_next_scheduled( 'wp_maybe_auto_update' ) ) {
+			$found[] = 'update_event_not_scheduled';
+		}
+
+		return $found;
+	}
+
+	/**
+	 * Whether a checkout sits over the plugin or the install root.
+	 *
+	 * The same four directories WordPress looks for, asked of the two paths that matter here
+	 * rather than of every parent. `is_vcs_checkout()` walks upwards and will find a
+	 * repository the site is merely deployed inside, which is not the same claim.
+	 *
+	 * @return bool
+	 */
+	private static function under_version_control() {
+		$roots = array();
+
+		if ( defined( 'WPAQS_DIR' ) ) {
+			$roots[] = WPAQS_DIR;
+		}
+
+		if ( defined( 'ABSPATH' ) ) {
+			$roots[] = ABSPATH;
+		}
+
+		foreach ( $roots as $root ) {
+			foreach ( array( '.git', '.svn', '.hg', '.bzr' ) as $dir ) {
+				if ( is_dir( rtrim( (string) $root, "/\\" ) . '/' . $dir ) ) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The blockers as findings, for `gather()` to merge like any other reader here.
+	 *
+	 * An array rather than a call against a collector, because this plugin has no collector:
+	 * every reader returns findings and `gather()` merges them.
+	 *
+	 * Informational for now, and that is a measurement rather than a judgement. The severity
+	 * this deserves is higher — a site that cannot update the scanner watching its accounts
+	 * is something somebody should answer — but nobody yet knows how much of a fleet it fires
+	 * on, and a rule that lapses every review on the day it ships is one people switch off
+	 * before they have read it. `WPSEC-PENDING.md` carries the second decision.
+	 *
+	 * @return array
+	 */
+	public static function findings() {
+		$found = self::blockers();
+
+		if ( empty( $found ) ) {
+			return array();
+		}
+
+		return array(
+			WPAQS_Findings::make(
+				'auto_update_blocked',
+				'plugin:' . self::REPO . ':auto-update',
+				sprintf( 'blocked_by=%s', implode( ',', $found ) ),
+				sprintf(
+					/* translators: %s: comma-separated list of reason codes. */
+					__( 'What stands in the way on this site: %s.', 'wpaqs' ),
+					implode( ', ', $found )
+				)
+			),
+		);
+	}
+
+	/**
 	 * Say why the auto-update toggle is not there.
 	 *
 	 * @param string $html   The markup WordPress was going to print.
