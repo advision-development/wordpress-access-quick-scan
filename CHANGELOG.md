@@ -3,6 +3,49 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.17.0
+
+**The console can ask for a fresh report, per site or across the fleet.** The sibling half of
+the same change, landing together because `class-fleet.php` is shared.
+
+There is no scan here — reading live state *is* the read — so where the malware scanner walks
+files for minutes, this does one pass. Both answer the same instruction, and neither the
+console nor the channel needs to know which is which: the site knows what reporting means for
+the site.
+
+**A stamp rather than a flag.** A flag would have every site re-reading on every hourly check
+for as long as the request stood. The site remembers the last stamp it acted on, so a standing
+request produces exactly one report and a later request exactly one more. `asking_is_new()` is
+its own function so the comparison can be asserted against — mutation testing said it needed
+to be, because nothing held it while it was inline.
+
+**And a defect in this repository's own drift guard, found on the way.** `normalised()` in
+`test-shared.php` listed this plugin's prefix twice instead of both, so a literal `WPMQS` in a
+shared file survived normalisation here and not in the sibling, and the two hashed differently
+for a difference that is not one. The symptom had been sitting in `class-fleet.php` for some
+time: a comment reading `sed 's/WPAQS_/WPAQS_/g'` — prose nobody could act on, written to
+satisfy a hash rather than a reader. Both prefixes are normalised now, and the comment says
+the thing it meant.
+
+## 0.16.0
+
+**The site asks the console whether to update, rather than waiting a day.** The sibling half
+of the same change, landing together because `class-fleet.php` is shared and byte-identical.
+
+This plugin updates itself unattended on WordPress's twice-daily schedule; across a 165-site
+fleet that left eighteen sites between one and three releases behind while reporting on time
+every day. It matters here for a reason of its own: the account rules an old copy knows are
+the rules it shipped with, so it answers those and stays silent about the rest — which reads
+exactly like a site with nothing wrong.
+
+The console never calls a site; the answer is a version and never a location; and a site that
+refuses unattended updates is not overridden. `DISALLOW_FILE_MODS` is the constant this
+plugin's own `file_editing_enabled` recommendation points at, so a site can take that advice
+and stop updating the scanner that gave it — it stays behind, and `auto_update_blocked` says
+why.
+
+*Written after the fact: this release shipped without a changelog entry.*
+
 ## 0.15.0
 
 **A site can refuse every unattended update and nothing said so.** `automatically()` answers

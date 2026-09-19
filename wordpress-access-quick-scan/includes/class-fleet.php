@@ -3,7 +3,7 @@
  * Talking to the fleet console.
  *
  * This file is copied verbatim into the sibling plugin, so it must stay byte-identical
- * except for the class prefix: `sed 's/WPAQS_/WPAQS_/g'` over the copy has to diff clean
+ * except for the class prefix: `sed 's/WPMQS_/WPAQS_/g'` over the copy has to diff clean
  * against this. Two active plugins declaring a class of the same name is a PHP fatal,
  * and two copies that have quietly drifted is worse than either.
  *
@@ -39,7 +39,7 @@ class WPAQS_Fleet {
 	 * The lower-case prefix this plugin uses, derived rather than written.
 	 *
 	 * WPAQS_Fleet -> wpaqs. Deriving it is what keeps this file byte-identical to the
-	 * sibling's copy: `sed 's/WPAQS_/WPAQS_/g'` rewrites the class name and this follows,
+	 * sibling's copy: `sed 's/WPMQS_/WPAQS_/g'` rewrites the class name and this follows,
 	 * where a literal 'wpaqs' would not.
 	 *
 	 * @return string
@@ -294,9 +294,57 @@ class WPAQS_Fleet {
 	 *
 	 * @return string The version the console asks for, or `''` when it asks for nothing.
 	 */
-	public static function wanted_version() {
+	public static function wanted_version( ?array $answer = null ) {
+		$answer = null === $answer ? self::instructions() : $answer;
+		$want   = isset( $answer['updateTo'] ) ? $answer['updateTo'] : '';
+
+		// Three numbers or nothing. The site is about to compare this against its own
+		// version and act on the comparison, so anything that is not plainly a version is a
+		// string that could compare in a way nobody predicted.
+		return is_string( $want ) && preg_match( '~^\d{1,5}\.\d{1,5}\.\d{1,5}$~', $want ) ? $want : '';
+	}
+
+	/**
+	 * When the console last asked this site to report, as a millisecond stamp.
+	 *
+	 * A stamp rather than a flag, decided on the console side and read here the same way: a
+	 * flag would have this site rescanning on every hourly check for as long as the request
+	 * stood. The caller remembers the last stamp it acted on and compares, so a standing
+	 * request produces exactly one run.
+	 *
+	 * Read from the same answer as the version — the site asks once an hour and gets both,
+	 * rather than asking twice for two fields.
+	 *
+	 * @return int The stamp, or 0 when nothing was asked.
+	 */
+	public static function scan_requested_at( ?array $answer = null ) {
+		$answer = null === $answer ? self::instructions() : $answer;
+		$after  = isset( $answer['scanAfter'] ) ? $answer['scanAfter'] : 0;
+
+		// A number and nothing else, and not a negative one: this is compared against a
+		// stored stamp, and a string that compares oddly is a site that scans every hour or
+		// never again.
+		return ( is_int( $after ) || is_float( $after ) ) && $after > 0 ? (int) $after : 0;
+	}
+
+	/**
+	 * Everything the console has to say, in one request.
+	 *
+	 * Public and unmemoised, and the hourly check calls it once and reads both fields off
+	 * the result. The alternative — one accessor per field, each making its own request —
+	 * would double this endpoint's load across the fleet for nothing, and a memo to avoid
+	 * that would be a cache of an answer that is about this moment, which is how a withdrawn
+	 * instruction goes on being obeyed.
+	 *
+	 * A refusal, an outage or a malformed reply all answer an empty array, which is what the
+	 * site did before any of this existed. Nothing here may turn the console being
+	 * unreachable into an action.
+	 *
+	 * @return array The decoded answer, or an empty array.
+	 */
+	public static function instructions() {
 		if ( ! self::enrolled() ) {
-			return '';
+			return array();
 		}
 
 		$response = self::post(
@@ -310,16 +358,10 @@ class WPAQS_Fleet {
 		);
 
 		if ( '' !== $response['error'] ) {
-			return '';
+			return array();
 		}
 
-		$body = isset( $response['body'] ) && is_array( $response['body'] ) ? $response['body'] : array();
-		$want = isset( $body['updateTo'] ) ? $body['updateTo'] : '';
-
-		// Three numbers or nothing. The site is about to compare this against its own
-		// version and act on the comparison, so anything that is not plainly a version is a
-		// string that could compare in a way nobody predicted.
-		return is_string( $want ) && preg_match( '~^\d{1,5}\.\d{1,5}\.\d{1,5}$~', $want ) ? $want : '';
+		return isset( $response['body'] ) && is_array( $response['body'] ) ? $response['body'] : array();
 	}
 
 	public static function push( array $record, $run_id ) {
