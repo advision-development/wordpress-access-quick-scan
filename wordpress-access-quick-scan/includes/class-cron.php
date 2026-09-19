@@ -28,6 +28,9 @@ class WPAQS_Cron {
 	/** Enrolment, which waits on a person and so asks more often. */
 	const FLEET_HOOK = 'wpaqs_fleet_check';
 
+	/** The last console request for a fresh report this site acted on. See `report_if_asked()`. */
+	const ASKED_OPTION = 'wpaqs_asked';
+
 	/**
 	 * Register the handler.
 	 *
@@ -128,6 +131,58 @@ class WPAQS_Cron {
 	 *
 	 * @return void
 	 */
+	/**
+	 * Report because the console asked, and only once per asking.
+	 *
+	 * The sibling walks files for this and can take minutes. There is no scan here — reading
+	 * live state *is* the read — so the same instruction costs this plugin one pass and the
+	 * console gets both halves of a site's answer refreshed together.
+	 *
+	 * The console sends a stamp rather than a flag and this remembers the last one it acted
+	 * on, so a standing request produces exactly one report and a later request produces
+	 * exactly one more. Recorded before the read rather than after: a read that dies halfway
+	 * would otherwise repeat on every hourly check until the request aged out.
+	 *
+	 * @param int $asked The stamp the console sent, or 0.
+	 * @return void
+	 */
+	private static function report_if_asked( $asked ) {
+		if ( $asked <= 0 ) {
+			return;
+		}
+
+		/*
+		 * Its own option rather than the fleet state, whose writer is private in the shared
+		 * file. A one-integer option keeps a byte-identical file from needing a change in
+		 * both plugins for a fact about this one's reporting.
+		 */
+		$done = (int) get_option( self::ASKED_OPTION, 0 );
+
+		if ( ! self::asking_is_new( $asked, $done ) ) {
+			return;
+		}
+
+		update_option( self::ASKED_OPTION, $asked, false );
+
+		self::report_to_fleet_if_enrolled();
+	}
+
+	/**
+	 * Whether a request is one this site has not already answered.
+	 *
+	 * Its own function so it can be asserted against. It is the guard that turns a standing
+	 * request into exactly one run, and without it every site walks its own files on every
+	 * hourly check until the request ages out — which across a fleet is the difference
+	 * between asking for a report and asking for six hours of them.
+	 *
+	 * @param int $asked The stamp the console sent.
+	 * @param int $done  The last stamp this site acted on.
+	 * @return bool
+	 */
+	public static function asking_is_new( $asked, $done ) {
+		return (int) $asked > 0 && (int) $asked > (int) $done;
+	}
+
 	public static function report_to_fleet_if_enrolled() {
 		if ( ! class_exists( 'WPAQS_Fleet' ) || ! WPAQS_Fleet::enrolled() ) {
 			return;
@@ -210,9 +265,13 @@ class WPAQS_Cron {
 			 * simply does not ask — which the console can already see, and which is more
 			 * useful than a push that failed silently.
 			 */
+			$told = WPAQS_Fleet::instructions();
+
 			if ( class_exists( 'WPAQS_Updater' ) ) {
-				WPAQS_Updater::apply_requested( WPAQS_Fleet::wanted_version() );
+				WPAQS_Updater::apply_requested( WPAQS_Fleet::wanted_version( $told ) );
 			}
+
+			self::report_if_asked( WPAQS_Fleet::scan_requested_at( $told ) );
 
 			$state = WPAQS_Fleet::state();
 

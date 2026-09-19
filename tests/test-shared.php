@@ -42,11 +42,23 @@ function check( $label, $ok, $detail = '' ) {
 function normalised( $path ) {
 	$source = (string) file_get_contents( $path );
 
-	// The bare prefix, not the underscored one: `@package WPAQS` carries no underscore
-	// and would otherwise survive into the copy naming the wrong plugin — consistently
-	// wrong in both, which is exactly the kind of drift a hash cannot see.
+	/*
+	 * Both prefixes, not this one twice.
+	 *
+	 * The bare prefix as well as the underscored one: `@package WPAQS` carries no underscore
+	 * and would otherwise survive into the copy naming the wrong plugin — consistently wrong
+	 * in both, which is exactly the kind of drift a hash cannot see.
+	 *
+	 * And the sibling's, which this list held as a second copy of its own. A shared file
+	 * legitimately names the other plugin — the header of class-fleet.php says which sed
+	 * turns one copy into the other — and with only one prefix normalised that literal
+	 * survived here and not in the sibling, so the two hashed differently for a difference
+	 * that is not one. The visible symptom was that comment reading `sed 's/WPAQS_/WPAQS_/g'`
+	 * in this repository: prose nobody could act on, written to satisfy a hash rather than a
+	 * reader.
+	 */
 	return str_replace(
-		array( 'WPAQS', 'WPAQS', 'wpaqs', 'wpaqs' ),
+		array( 'WPMQS', 'WPAQS', 'wpmqs', 'wpaqs' ),
 		array( 'PREFIX', 'PREFIX', 'prefix', 'prefix' ),
 		$source
 	);

@@ -34,6 +34,7 @@ delete_site_transient( 'wpaqs_release' );
 // point: an uninstalled plugin that left one behind would leave a credential on a site
 // nobody is watching any more.
 delete_option( 'wpaqs_fleet' );
+delete_option( 'wpaqs_asked' );
 
 // The only event this plugin ever schedules.
 wp_clear_scheduled_hook( 'wpaqs_daily_report' );

@@ -530,5 +530,44 @@ $GLOBALS['posts']                  = array();
 check( 'a site that is not enrolled does not ask at all', '' === WPAQS_Fleet::wanted_version() );
 check( 'and sends nothing', array() === $GLOBALS['posts'] );
 
+
+// ---- and when to report, on the same answer
+
+// Enrolled again: the block above ends with a site that is not, deliberately.
+$GLOBALS['options']['wpaqs_fleet'] = array( 'key' => 'the-key' );
+
+$GLOBALS['reply'] = array( 'code' => 200, 'body' => array( 'scanAfter' => 1790000000000 ) );
+check( 'a request to report now arrives as a stamp', 1790000000000 === WPAQS_Fleet::scan_requested_at() );
+
+/*
+ * A stamp, not a flag, and this is why: the site compares it against the last one it acted
+ * on. Anything that does not compare as a number is a site that reports every hour or never
+ * again, and both are worse than not asking.
+ */
+foreach ( array( 'now', '1790000000000', true, array( 1 ), -5, 0 ) as $bad ) {
+	$GLOBALS['reply'] = array( 'code' => 200, 'body' => array( 'scanAfter' => $bad ) );
+
+	check(
+		sprintf( 'refuses %-14s as a stamp', is_scalar( $bad ) ? var_export( $bad, true ) : 'array' ),
+		0 === WPAQS_Fleet::scan_requested_at()
+	);
+}
+
+// Both instructions ride one answer, and one request an hour is the whole point of that.
+$GLOBALS['reply'] = array(
+	'code' => 200,
+	'body' => array( 'updateTo' => '9.9.9', 'scanAfter' => 1790000000000 ),
+);
+$GLOBALS['posts'] = array();
+
+$told = WPAQS_Fleet::instructions();
+
+check( 'one request carries both', 1 === count( $GLOBALS['posts'] ), (string) count( $GLOBALS['posts'] ) );
+check( 'and the version reads off it', '9.9.9' === WPAQS_Fleet::wanted_version( $told ) );
+check( 'and so does the stamp', 1790000000000 === WPAQS_Fleet::scan_requested_at( $told ) );
+
+$GLOBALS['reply'] = array( 'wp_error' => true );
+check( 'an unreachable console asks for no report either', 0 === WPAQS_Fleet::scan_requested_at() );
+
 printf( "\n%d failure(s)\n", $failures );
 exit( $failures > 0 ? 1 : 0 );
