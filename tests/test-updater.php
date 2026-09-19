@@ -721,4 +721,36 @@ define( 'AUTOMATIC_UPDATER_DISABLED', true );
 
 check( 'and so is the one managed hosts set', in_array( 'AUTOMATIC_UPDATER_DISABLED', WPAQS_Updater::blockers(), true ) );
 
+// ------------------------------------------- what the console can and cannot ask for
+//
+// The console says which version it has seen published. It never says where to fetch from:
+// this plugin pins downloads to one host, owner and repository, and a console able to name a
+// location would be arbitrary code on 165 sites the moment it was compromised.
+
+check( 'nothing asked is nothing done', 'idle' === WPAQS_Updater::apply_requested( '' ) );
+check( 'and neither is a non-string', 'idle' === WPAQS_Updater::apply_requested( null ) );
+
+// WPAQS_VERSION is 0.1.0 in this harness.
+check( 'a version already installed is current', 'current' === WPAQS_Updater::apply_requested( '0.1.0' ) );
+check( 'an older one is not a downgrade', 'current' === WPAQS_Updater::apply_requested( '0.0.9' ) );
+check(
+	'and the padding lesson is not relearned here',
+	'current' === WPAQS_Updater::apply_requested( '0.1.0' ),
+	'an unpadded compare reads 0.1 and 0.1.0 as different versions'
+);
+
+/*
+ * The refusal the design rests on. A site that sets AUTOMATIC_UPDATER_DISABLED has said it
+ * does not take unattended updates, and a remote button that overrode it would turn a
+ * hardening constant into a decoration — the class of fault this plugin exists to report.
+ * The press is attended at the console and unattended here, and the constant means the second.
+ *
+ * DISALLOW_FILE_MODS is defined above, so every blocker path is live by this point.
+ */
+check(
+	'a site that refuses unattended updates is not overridden',
+	'blocked' === WPAQS_Updater::apply_requested( '9.9.9' ),
+	'it stays behind and auto_update_blocked says why'
+);
+
 finish();

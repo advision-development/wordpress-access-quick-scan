@@ -273,6 +273,55 @@ class WPAQS_Fleet {
 	 * @param string $run_id Identifies this scan execution, so a retry is not a new scan.
 	 * @return array array( error )
 	 */
+	/**
+	 * Ask the console whether this site should bring itself up to date.
+	 *
+	 * The console never calls a site and this does not change that. Every enrolled site
+	 * already runs an hourly fleet check; this is one more question asked on it, over the
+	 * connection this file already authenticates. So there is no inbound endpoint to secure
+	 * on the fleet, no signing scheme, and a site whose cron has stopped simply does not ask
+	 * — which the console can already see, and which is a more useful thing to know than a
+	 * push that failed silently.
+	 *
+	 * **The answer is a version and never a location.** This plugin pins its downloads to one
+	 * host, owner and repository and refuses anything else; if the console could name where to
+	 * fetch from, a compromise of the console would be arbitrary code on every site in the
+	 * fleet. So the only thing read out of the reply is `updateTo`, and the only thing done
+	 * with it is a comparison.
+	 *
+	 * A refusal, an outage or a malformed reply all answer `''`, which is what the site did
+	 * before this existed. Nothing here may turn the console being unreachable into an action.
+	 *
+	 * @return string The version the console asks for, or `''` when it asks for nothing.
+	 */
+	public static function wanted_version() {
+		if ( ! self::enrolled() ) {
+			return '';
+		}
+
+		$response = self::post(
+			'/ask',
+			array(
+				'v'             => 1,
+				'plugin'        => self::prefix(),
+				'pluginVersion' => self::version(),
+			),
+			true
+		);
+
+		if ( '' !== $response['error'] ) {
+			return '';
+		}
+
+		$body = isset( $response['body'] ) && is_array( $response['body'] ) ? $response['body'] : array();
+		$want = isset( $body['updateTo'] ) ? $body['updateTo'] : '';
+
+		// Three numbers or nothing. The site is about to compare this against its own
+		// version and act on the comparison, so anything that is not plainly a version is a
+		// string that could compare in a way nobody predicted.
+		return is_string( $want ) && preg_match( '~^\d{1,5}\.\d{1,5}\.\d{1,5}$~', $want ) ? $want : '';
+	}
+
 	public static function push( array $record, $run_id ) {
 		if ( ! self::enrolled() ) {
 			return array( 'error' => __( 'This site is not enrolled with the fleet console.', 'wpaqs' ) );

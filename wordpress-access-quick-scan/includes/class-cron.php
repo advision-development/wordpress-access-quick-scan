@@ -201,6 +201,19 @@ class WPAQS_Cron {
 		// and waiting for the next one would leave the console showing a site it has
 		// heard nothing from.
 		if ( WPAQS_Fleet::enrolled() ) {
+			/*
+			 * Whether the console has asked the fleet to catch up.
+			 *
+			 * One request an hour on an enrolled site, answering nothing at all unless
+			 * somebody pressed a button. This is the shape the whole channel was chosen for:
+			 * the site asks, the console never calls, and a site whose cron has stopped
+			 * simply does not ask — which the console can already see, and which is more
+			 * useful than a push that failed silently.
+			 */
+			if ( class_exists( 'WPAQS_Updater' ) ) {
+				WPAQS_Updater::apply_requested( WPAQS_Fleet::wanted_version() );
+			}
+
 			$state = WPAQS_Fleet::state();
 
 			if ( empty( $state['pushed_at'] ) ) {
