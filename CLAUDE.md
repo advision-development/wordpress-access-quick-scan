@@ -581,9 +581,25 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 | `test-uninstall.php` | That every name the source stores is named in uninstall.php, deleted as a site transient, that nothing outside the prefix is deleted, and that uninstalling touches no account or session |
 | `test-updater.php` | Where an update package may come from, the traversal that defeats a prefix, tags that are not versions, both directions of the padding trap, and that the cache is named in uninstall.php |
 | `test-markup.php` | Sibling forms, every action confirming, the four coverage statements, the disclosed cap, grouped rendering, and that no evidence is echoed raw |
+| `test-report.php` | What leaves the site and what deliberately does not — this plugin reads logins, addresses and where people sign in from |
+| `test-asking.php` | One asking, one run. The console sends a stamp rather than a flag, and this is the comparison that stops a standing request scanning hourly |
 
 When adding a rule, add both a positive case and the benign case that must **not** match. A
 rule without a false-positive test is not finished.
+
+**Renaming a rule re-identifies every finding it has ever produced.** `class-report.php`
+builds an id as `sha1( $rule . '|' . $target )`, and the fleet console keys its baseline — what
+a person has already looked at and accepted — on those ids. So a rename empties that baseline
+for the rule, on every enrolled site, in one report. The sibling plugin did this in WPMQS
+0.46.0 by splitting a rule in two, and every finding it had ever produced came back as unseen
+across the fleet on 2026-09-22.
+
+It stayed noise there because those findings were informational, and informational findings
+cannot lapse a console review. **This plugin's rules are mostly not informational** — an
+account, a session or an application password finding is `high` or `medium`, and a rename of
+one of those would end every standing review that had accepted it and refill the queue with
+sites nobody needs to look at. **Treat a rule rename as a fleet-wide event**: check the
+severity and how many sites carry it, and say so in the changelog entry.
 
 ## Conventions
 

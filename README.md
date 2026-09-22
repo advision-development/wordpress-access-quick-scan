@@ -149,8 +149,10 @@ destroys the account's posts, and those posts are the record of what it did.
 ./tests/run.sh
 ```
 
-820 assertions across fifteen harnesses, no WordPress install needed — the functions it touches are stubbed in
-`tests/wp-stubs.php`.
+**885 assertions across sixteen harnesses**, no WordPress install needed — the functions it
+touches are stubbed in `tests/wp-stubs.php`. Measured 2026-09-22; it said 820 across fifteen
+until then, which predates `test-asking.php` and the update work of 0.15.0 to 0.18.0.
+`CLAUDE.md` lists what each harness covers.
 
 Every rule ships with the benign case that must stay silent. A rule without a
 false-positive test is not finished.
