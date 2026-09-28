@@ -3,7 +3,7 @@
  * Plugin Name:       WordPress Access Quick Scan
  * Plugin URI:        https://advisiondevelopment.com/
  * Description:       Answers one question: who has access to this site right now, and does any of it look wrong. Lists every account with the capabilities it actually holds, every live session with its IP and user agent, and every application password with when and where it was last used. Reading the screen changes nothing. Six actions do, and each has to be pressed by a person against something confirmed to exist at that moment: end one session or all of an account's, revoke an application password, take a directly granted capability off an account, and the two ways to stop open registration handing out a privileged role. None of them deletes an account or anything it created.
- * Version:           0.18.0
+ * Version:           0.19.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            Advision Development
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPAQS_VERSION', '0.18.0' );
+define( 'WPAQS_VERSION', '0.19.0' );
 define( 'WPAQS_FILE', __FILE__ );
 define( 'WPAQS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPAQS_URL', plugin_dir_url( __FILE__ ) );
@@ -88,5 +88,10 @@ register_activation_hook( __FILE__, 'wpaqs_activate' );
  */
 function wpaqs_deactivate() {
 	WPAQS_Cron::unschedule();
+
+	// Booked when the version changes and cleared when it fires, so it is usually absent — but
+	// deactivating between those two moments would otherwise leave a cron entry pointing at a
+	// hook nothing answers, which is the one kind of litter this function exists to stop.
+	wp_clear_scheduled_hook( WPAQS_Cron::AFTER_UPDATE_HOOK );
 }
 register_deactivation_hook( __FILE__, 'wpaqs_deactivate' );

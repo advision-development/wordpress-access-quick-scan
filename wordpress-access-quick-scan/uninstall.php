@@ -35,7 +35,13 @@ delete_site_transient( 'wpaqs_release' );
 // nobody is watching any more.
 delete_option( 'wpaqs_fleet' );
 delete_option( 'wpaqs_asked' );
+delete_option( 'wpaqs_version_seen' );
 
 // The only event this plugin ever schedules.
 wp_clear_scheduled_hook( 'wpaqs_daily_report' );
 wp_clear_scheduled_hook( 'wpaqs_fleet_check' );
+
+// Booked once when this plugin's version changes and cleared when it fires, so it is usually
+// absent — but an uninstall between the booking and the firing would otherwise leave a cron
+// entry pointing at a hook nothing answers.
+wp_clear_scheduled_hook( 'wpaqs_after_update' );
