@@ -31,6 +31,20 @@ class WPAQS_Cron {
 	/** The last console request for a fresh report this site acted on. See `report_if_asked()`. */
 	const ASKED_OPTION = 'wpaqs_asked';
 
+	/** Reports once shortly after this plugin's own version changes. */
+	const AFTER_UPDATE_HOOK = 'wpaqs_after_update';
+
+	/**
+	 * The version this site last reported under. See `report_after_update()`.
+	 *
+	 * Autoloaded, unlike the rest of what this plugin stores, and that is the right way round
+	 * for this one: a short string read on every request by `book_report_after_update()` and
+	 * written a few times a year. With autoload off it would be a database query on every page
+	 * load of every site in the fleet, for ever, to notice something that happens when a
+	 * release ships.
+	 */
+	const VERSION_OPTION = 'wpaqs_version_seen';
+
 	/**
 	 * Register the handler.
 	 *
@@ -41,6 +55,7 @@ class WPAQS_Cron {
 	public static function register() {
 		add_action( self::HOOK, array( __CLASS__, 'run' ) );
 		add_action( self::FLEET_HOOK, array( __CLASS__, 'keep_up_with_fleet' ) );
+		add_action( self::AFTER_UPDATE_HOOK, array( __CLASS__, 'report_after_update' ) );
 
 		/*
 		 * On every load, not only on activation — and that is the fix for a real fault.
@@ -67,7 +82,88 @@ class WPAQS_Cron {
 	 *
 	 * @return void
 	 */
+	/**
+	 * Put a report on the schedule when this plugin's own version has changed.
+	 *
+	 * The sibling's reasoning, arrived at there and recorded in full in its `class-cron.php`:
+	 * when the rules change the stored report goes stale in a way nothing on the site caused,
+	 * and the console carries the wrong picture until the next daily run. The difference here
+	 * is cost. There is no scan in this plugin — reading live state *is* the read — so this is
+	 * one pass rather than a file walk, and the jitter is about 165 sites posting to one
+	 * console at the same second rather than about the work on each of them.
+	 *
+	 * Not hooked to `upgrader_process_complete`: that hook took 40 sites to a fatal on
+	 * 2026-09-21 and does not fire at all for an update applied over FTP or by a host's own
+	 * tooling. Comparing the stored version against the constant catches every one of those.
+	 *
+	 * @return void
+	 */
+	private static function book_report_after_update() {
+		if ( ! self::update_is_new( get_option( self::VERSION_OPTION, '' ), WPAQS_VERSION ) ) {
+			return;
+		}
+
+		if ( wp_next_scheduled( self::AFTER_UPDATE_HOOK ) ) {
+			return;
+		}
+
+		wp_schedule_single_event( time() + wp_rand( MINUTE_IN_SECONDS, 10 * MINUTE_IN_SECONDS ), self::AFTER_UPDATE_HOOK );
+	}
+
+	/**
+	 * Whether the version on disk is one this site has not reported under yet.
+	 *
+	 * Its own function so it can be asserted against, the same reason `asking_is_new()` is.
+	 * An **empty** stored version is a fresh install rather than an update — enrolment already
+	 * reports, so acting here would double the first report every site ever sends. A rollback
+	 * counts as a change, unlike an older console stamp: a press has an order and a build does
+	 * not, and rolling back is exactly when the rules underneath the last report moved.
+	 *
+	 * @param string $seen    The version recorded after the last report, or ''.
+	 * @param string $current The version on disk now.
+	 * @return bool
+	 */
+	public static function update_is_new( $seen, $current ) {
+		return '' !== (string) $seen && (string) $seen !== (string) $current;
+	}
+
+	/**
+	 * Report because this plugin's own version changed.
+	 *
+	 * **The version is recorded before the read, not after**, for the reason
+	 * `report_if_asked()` records its stamp first: a read that dies halfway would otherwise
+	 * leave the marker unwritten and the site would try again on every request until somebody
+	 * noticed.
+	 *
+	 * No equivalent of the sibling's scheduled-scanning check, and not by omission. That gate
+	 * exists because a standalone install can switch scanning off and an update is not a
+	 * reason to overrule it. This plugin has no such switch and nothing to overrule: the only
+	 * thing here is a report, and `report_to_fleet_if_enrolled()` already answers with nothing
+	 * on a site that belongs to no console.
+	 *
+	 * @return void
+	 */
+	public static function report_after_update() {
+		$seen = get_option( self::VERSION_OPTION, '' );
+
+		if ( ! self::update_is_new( $seen, WPAQS_VERSION ) ) {
+			// Still record it, so a fresh install stops looking like one and the next real
+			// update is read as a change rather than as another first run.
+			if ( (string) $seen !== (string) WPAQS_VERSION ) {
+				update_option( self::VERSION_OPTION, WPAQS_VERSION, true );
+			}
+
+			return;
+		}
+
+		update_option( self::VERSION_OPTION, WPAQS_VERSION, true );
+
+		self::report_to_fleet_if_enrolled();
+	}
+
 	public static function schedule() {
+		self::book_report_after_update();
+
 		if ( wp_next_scheduled( self::HOOK ) ) {
 			return;
 		}
@@ -272,6 +368,17 @@ class WPAQS_Cron {
 			}
 
 			self::report_if_asked( WPAQS_Fleet::scan_requested_at( $told ) );
+
+			/*
+			 * The backstop for the single event booked at `init`: a lost cron entry, or a site
+			 * whose scheduler only runs on traffic, ends up here within the hour instead.
+			 *
+			 * Placed after `apply_requested()` and it makes no difference where it sits, for
+			 * the reason the sibling records: `WPAQS_VERSION` is the constant *this request*
+			 * loaded, so an update applied above leaves it untouched and the comparison is old
+			 * against old. What protects this is the constant, not the ordering.
+			 */
+			self::report_after_update();
 
 			$state = WPAQS_Fleet::state();
 

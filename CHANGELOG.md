@@ -3,6 +3,52 @@
 Where a version fixes a false positive, the false positive is named: each one becomes a
 regression test, and that list is the most useful thing in this file.
 
+## 0.19.0
+
+**A scanner that updated is a scanner with different answers.** The sibling half of WPMQS
+0.47.0, and the same reasoning: when a plugin's own rules change, the stored report goes stale
+in a way nothing on the site caused — findings appear or disappear because detection moved.
+Twice in one week a rule change alone moved findings across the fleet, and the console carried
+the wrong picture until each site's next daily run.
+
+A site now sends one report shortly after its own version changes.
+
+**The cost is the difference from the sibling.** There is no scan in this plugin — reading live
+state *is* the read — so this is one pass rather than a file walk. The jitter on the scheduled
+event is about 165 sites posting to one console at the same second rather than about the work
+on each of them.
+
+**Not from `upgrader_process_complete`.** That hook took 40 sites to a fatal on 2026-09-21 and
+does not fire at all for an update applied over FTP or by a host's tooling. The version on disk
+is compared against the version this site last reported under instead, which catches every way
+an update can arrive. `init` books a single jittered event; the hourly fleet check calls the
+same function as a backstop.
+
+**The report never runs in the request that applied the update.** `WPAQS_VERSION` is the
+constant that request loaded, and replacing the files on disk does not change it, so an update
+applied mid-request compares old against old and books nothing.
+
+**A fresh install does not report twice** — an empty stored version is a first run and
+enrolment already reports. **A rollback counts as a change**, unlike an older console stamp: a
+press has an order and a build does not. **The version is recorded before the read**, for the
+reason `report_if_asked()` records its stamp first.
+
+**No equivalent of the sibling's scheduled-scanning gate, and not by omission.** That check
+exists because a standalone WPMQS install can switch scanning off and an update is not a reason
+to overrule it. This plugin has no such switch and nothing to overrule: the only thing here is
+a report, and `report_to_fleet_if_enrolled()` already answers with nothing on a site that
+belongs to no console.
+
+**This release records the version; it does not report.** An existing install has nothing
+stored, which reads as a first run. The first automatic report this produces is on the update
+after it.
+
+897 assertions, up 12. Two mutations bite: dropping the empty-version check makes a fresh
+install report twice, and recording the version after the read loses the marker when the read
+dies. The ordering test checks the *message* of the exception it catches rather than the fact
+of one — in the sibling an identical test passed for a while on a different missing class,
+because a Throwable is a Throwable.
+
 ## 0.18.0
 
 **A blocker fired on a site that had just updated itself.** The sibling half of the same
