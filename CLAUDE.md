@@ -587,6 +587,21 @@ own `get_users()`. `tests/bootstrap.php` defines the plugin constants and `check
 When adding a rule, add both a positive case and the benign case that must **not** match. A
 rule without a false-positive test is not finished.
 
+**Pushing the tag is the release. Do not also create it by hand.**
+`.github/workflows` builds and publishes on a tag push: it checks the tag against both version
+strings, builds, and runs `gh release create` with the zip. On 2026-09-28 v0.19.0 was tagged
+and the release was then created manually as well, so the workflow failed on `a release with
+the same tag name already exists`. Nothing was broken — the tag check and the build had both
+passed — but the run is red for a reason that is worth not repeating. The sibling repository
+did the same thing the same day.
+
+**A test can pass on the wrong exception.** `test-asking.php` drives `report_after_update()`
+by making the fleet transport throw where a host would kill the process, and asserts the
+version was recorded before the read. Written as `catch ( Throwable )` and a boolean, it passed
+while the code was actually dying earlier on a missing class — the sibling's version of this
+test did exactly that for a while. It checks the exception's **message** now, so "the read was
+reached" means the read and not the next missing symbol.
+
 **Renaming a rule re-identifies every finding it has ever produced.** `class-report.php`
 builds an id as `sha1( $rule . '|' . $target )`, and the fleet console keys its baseline — what
 a person has already looked at and accepted — on those ids. So a rename empties that baseline
